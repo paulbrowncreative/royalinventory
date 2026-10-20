@@ -21,6 +21,7 @@
   const fmtSigned = (n) => (n === null || n === undefined ? '—' : (n > 0 ? '+' : '') + nf2.format(n));
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const natural = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+  const debounce = (fn, ms = 160) => { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }; };
   const statusKey = { ok: 'stOk', low: 'stLow', out: 'stOut', negative: 'stNegative' };
   const valueClass = (status) => ({ ok: 'v-pos', low: 'v-warn', out: 'v-neg', negative: 'v-neg' }[status]);
 
@@ -52,7 +53,7 @@
   }
 
   /* ---------- Tabs ---------- */
-  const TABS = ['dashboard', 'withdrawals', 'inventory', 'guide', 'settings'];
+  const TABS = ['dashboard', 'withdrawals', 'inventory', 'history', 'guide', 'settings'];
   function showTab(name, { focus = false, push = true } = {}) {
     if (!TABS.includes(name)) name = 'dashboard';
     ui.tab = name;
@@ -93,7 +94,8 @@
     if (ui.tab === 'dashboard') renderDashboard(d);
     if (ui.tab === 'inventory') renderInventory(d);
     if (ui.tab === 'withdrawals') { renderLog(d); updateWithdrawalPreview(); }
-    if (ui.tab === 'settings') $('#setThreshold').value = Store.state.settings.lowThreshold;
+    if (ui.tab === 'settings') renderSettings();
+    if (ui.tab === 'history') renderHistory(d);
   }
 
   function renderShared(d) {
@@ -279,7 +281,7 @@
     $('#logCount').textContent = t('rowsShown', { n: nf0.format(rows.length) });
     const { slice, pager } = paginate(rows, ui.log, 'log');
     $('#logBody').innerHTML = slice.length ? slice.map(({ w, c, fab }) => {
-      const after = d.runningAfter.get(w.id);
+      const after = d.runningAfter.get(w.uid);
       const g = d.items.get(Store.norm(fab.itemNo) || '—');
       const cls = after < 0 ? 'v-neg' : after <= d.threshold ? 'v-warn' : 'v-pos';
       return `<tr>
@@ -294,8 +296,8 @@
         <td data-label="${t('wItemTotal')}" class="num"><span class="${g && g.final < 0 ? 'v-neg' : 'v-pos'}">${fmt(g ? g.final : null)}</span></td>
         <td data-label="${t('wNotes')}">${esc(w.notes || '—')}</td>
         <td class="actions">
-          <button type="button" class="icon-btn" data-edit-w="${esc(w.id)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
-          <button type="button" class="icon-btn icon-btn--danger" data-del-w="${esc(w.id)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
+          <button type="button" class="icon-btn" data-edit-w="${esc(w.uid)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+          <button type="button" class="icon-btn icon-btn--danger" data-del-w="${esc(w.uid)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
         </td></tr>`;
     }).join('') : `<tr class="row-empty"><td colspan="11">${Store.state.withdrawals.length ? t('noResults') : t('noWithdrawalsYet')}</td></tr>`;
     $('#logPager').innerHTML = pager;
@@ -331,6 +333,170 @@
       </div>`;
   }
 
+  /* ---------- History ---------- */
+  ui.asOf = { date: '', q: '', page: 1 };
+  ui.period = { from: '', to: '' };
+  ui.cloudHistory = null;
+
+  function asOfRows() {
+    const q = Store.norm(ui.asOf.q);
+    return Store.computeAsOf(ui.asOf.date || Store.today())
+      .filter((r) => !q || [r.card.cardNo, r.card.itemNo, r.card.name, r.card.origin].some((v) => Store.norm(v).includes(q)))
+      .sort((a, b) => natural.compare(a.card.cardNo, b.card.cardNo));
+  }
+
+  function periodRows() {
+    return Store.periodSummary(ui.period.from, ui.period.to).sort((a, b) => b.qty - a.qty);
+  }
+
+  function renderHistory() {
+    const today = Store.today();
+    if (!ui.asOf.date) ui.asOf.date = today;
+    if (!ui.period.from) { ui.period.from = today.slice(0, 8) + '01'; ui.period.to = today; }
+    $('#asOfDate').value = ui.asOf.date; $('#periodFrom').value = ui.period.from; $('#periodTo').value = ui.period.to;
+
+    const rows = asOfRows();
+    const total = rows.reduce((t, r) => t + r.balance, 0);
+    $('#asOfSummary').innerHTML = `<span>${t('cardsCount')}: <strong class="ltr-num">${nf0.format(rows.length)}</strong></span>
+      <span>${t('asOfTotal')}: <strong class="ltr-num">${fmt(total)} ${t('kpiMeters')}</strong></span>`;
+    const { slice, pager } = paginate(rows, ui.asOf, 'asOf');
+    $('#asOfBody').innerHTML = slice.length ? slice.map((r) => `<tr>
+      <th scope="row" data-label="${t('cardNo')}" class="ltr-num">${esc(r.card.cardNo)}</th>
+      <td data-label="${t('itemNo')}" class="ltr-num">${esc(r.card.itemNo)}</td>
+      <td data-label="${t('fabricName')}">${esc(r.card.name)}</td>
+      <td data-label="${t('origin')}">${esc(r.card.origin || '—')}</td>
+      <td data-label="${t('openingStock')}" class="num">${fmt(r.opening)}</td>
+      <td data-label="${t('asOfWithdrawn')}" class="num">${fmt(r.withdrawn)}</td>
+      <td data-label="${t('asOfBalance')}" class="num"><strong class="${valueClass(r.status)}">${fmt(r.balance)}</strong>${r.counted ? ` <small class="muted-cell">${t('asOfCounted')}</small>` : ''}</td>
+      <td data-label="${t('stockAlert')}"><span class="badge badge--${r.status}">${t(statusKey[r.status])}</span></td></tr>`).join('')
+      : `<tr class="row-empty"><td colspan="8">${t('noResults')}</td></tr>`;
+    $('#asOfPager').innerHTML = pager;
+
+    const prow = periodRows();
+    const pTotal = prow.reduce((a, g) => ({ count: a.count + g.count, qty: a.qty + g.qty }), { count: 0, qty: 0 });
+    $('#periodBody').innerHTML = prow.length ? prow.map((g) => `<tr>
+      <th scope="row" data-label="${t('itemNo')}" class="ltr-num">${esc(g.itemNo)}</th>
+      <td data-label="${t('fabricName')}">${esc(g.name)}</td>
+      <td data-label="${t('origin')}">${esc(g.origin || '—')}</td>
+      <td data-label="${t('periodCount')}" class="num">${nf0.format(g.count)}</td>
+      <td data-label="${t('cardsCount')}" class="num">${nf0.format(g.cards.size)}</td>
+      <td data-label="${t('wQty')}" class="num"><strong>${fmt(g.qty)}</strong></td></tr>`).join('') + `<tr class="row-total">
+      <th scope="row" colspan="3">${t('total')}</th><td data-label="${t('periodCount')}" class="num">${nf0.format(pTotal.count)}</td><td></td>
+      <td data-label="${t('wQty')}" class="num"><strong>${fmt(pTotal.qty)}</strong></td></tr>`
+      : `<tr class="row-empty"><td colspan="6">${t('noResults')}</td></tr>`;
+
+    const tr = Store.state.trash;
+    const items = [
+      ...tr.cards.map((e) => ({ at: e.deletedAt, by: e.by, label: `${t('cardNo')} ${e.card.cardNo} · ${e.card.name}`, extra: e.withdrawals.length ? t('withLinked', { n: e.withdrawals.length }) : '', attr: `data-restore-card="${esc(e.card.id)}"` })),
+      ...tr.withdrawals.map((e) => ({ at: e.deletedAt, by: e.by, label: `${e.w.id} · ${fmt(e.w.qty)} ${t('kpiMeters')} · ${e.w.name || ''}`, extra: e.w.date, attr: `data-restore-w="${esc(e.w.uid)}"` })),
+    ].sort((a, b) => (a.at < b.at ? 1 : -1));
+    $('#trashList').innerHTML = items.length ? `<ul class="att-list">${items.map((x) => `<li class="att-item att-item--static">
+      <span class="att-item__main"><span>${esc(x.label)}</span></span>
+      <span class="att-item__meta"><small class="ltr-num">${esc(fmtStamp(x.at))}${x.by ? ' · ' + esc(x.by) : ''}</small>
+      <button type="button" class="btn btn--ghost btn--sm" ${x.attr}>${t('restore')}</button></span></li>`).join('')}</ul>`
+      : `<p class="empty-note">${t('trashEmpty')}</p>`;
+
+    renderCloudHistory();
+  }
+
+  function renderCloudHistory() {
+    const box = $('#cloudHistory');
+    if (!Cloud.connected()) { box.innerHTML = `<p class="empty-note">${t('historyNeedsCloud')} <button type="button" class="btn btn--link" data-action="goto-settings">${t('tabSettings')}</button></p>`; return; }
+    if (!ui.cloudHistory) { box.innerHTML = `<button type="button" class="btn btn--ghost btn--sm" data-action="load-history"><svg class="icon" aria-hidden="true"><use href="#i-history"/></svg>${t('loadHistory')}</button>`; return; }
+    if (ui.cloudHistory === 'loading') { box.innerHTML = `<p class="empty-note">${t('loading')}</p>`; return; }
+    const files = [...ui.cloudHistory].sort((a, b) => (a.name < b.name ? 1 : -1));
+    box.innerHTML = files.length ? `<ul class="att-list">${files.map((f) => `<li class="att-item att-item--static">
+      <span class="att-item__main"><strong class="ltr-num">${esc(f.name.replace(/\.json$/, ''))}</strong> <small class="ltr-num">${(f.size / 1024).toFixed(0)} KB</small></span>
+      <span class="att-item__meta"><button type="button" class="btn btn--ghost btn--sm" data-snap-download="${esc(f.path_lower)}">${t('download')}</button>
+      <button type="button" class="btn btn--link" data-snap-restore="${esc(f.path_lower)}">${t('restore')}</button></span></li>`).join('')}</ul>`
+      : `<p class="empty-note">${t('noHistoryYet')}</p>`;
+  }
+
+  const fmtStamp = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+
+  $('#asOfDate').addEventListener('change', (e) => { ui.asOf.date = e.target.value || Store.today(); ui.asOf.page = 1; render(); });
+  $('#asOfSearch').addEventListener('input', debounce((e) => { ui.asOf.q = e.target.value; ui.asOf.page = 1; render(); }));
+  $('#periodFrom').addEventListener('change', (e) => { ui.period.from = e.target.value; render(); });
+  $('#periodTo').addEventListener('change', (e) => { ui.period.to = e.target.value; render(); });
+
+  /* ---------- Settings & Dropbox ---------- */
+  function renderSettings() {
+    $('#setThreshold').value = Store.state.settings.lowThreshold;
+    try { $('#setUser').value = localStorage.getItem('royal-user') || ''; } catch (_) {}
+    const box = $('#cloudPanel');
+    const m = Store.meta;
+    if (Cloud.connected()) {
+      box.innerHTML = `
+        <p class="cloud-state cloud-state--on"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('cloudConnected')}</p>
+        <dl class="cloud-facts">
+          <div><dt>${t('cloudLastSync')}</dt><dd class="ltr-num">${esc(fmtStamp(m.lastSync))}</dd></div>
+          <div><dt>${t('cloudPending')}</dt><dd class="ltr-num">${nf0.format(m.pending.length)}</dd></div>
+          <div><dt>${t('cloudLocation')}</dt><dd class="ltr-num">Dropbox › Apps › … › royal-inventory.json</dd></div>
+        </dl>
+        <p class="muted">${t('cloudShareHint')}</p>
+        <div class="btn-row">
+          <button type="button" class="btn btn--gold" data-action="sync-now"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('syncNow')}</button>
+          <button type="button" class="btn btn--link" data-action="cloud-disconnect">${t('cloudDisconnect')}</button>
+        </div>`;
+      return;
+    }
+    const needsKey = !Cloud.hasConfigKey();
+    box.innerHTML = `
+      <p class="cloud-state"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('cloudOff')}</p>
+      <p class="muted">${t('cloudIntro')}</p>
+      ${needsKey ? `<ol class="cloud-steps">${t('cloudSteps').map((x) => `<li>${x}</li>`).join('')}
+        <li>${t('cloudRedirect')}<code class="copy-code ltr-num" id="redirectUri">${esc(Cloud.redirectUri())}</code>
+          <button type="button" class="btn btn--link" data-action="copy-redirect">${t('copy')}</button></li></ol>
+        <div class="field"><label for="dbxKey">${t('cloudAppKey')}</label>
+          <input class="input ltr-num" id="dbxKey" autocomplete="off" spellcheck="false" value="${esc(Cloud.appKey())}" aria-describedby="dbxKeyMsg"><p class="field__msg" id="dbxKeyMsg"></p></div>` : ''}
+      <div class="btn-row"><button type="button" class="btn btn--gold" data-action="cloud-connect"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('cloudConnect')}</button></div>`;
+  }
+
+  function showStatus(d) {
+    const el = $('#saveStatus');
+    el.dataset.state = d.state;
+    const text = {
+      local: t('stLocal'), syncing: t('stSyncing'), synced: t('stSynced', { t: d.at ? new Date(d.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '' }),
+      pending: t('stPending', { n: d.pending }), offline: t('stOffline', { n: d.pending || 0 }), 'sync-error': t('stSyncError'), auth: t('stAuth'), 'save-error': t('saveError'),
+    }[d.state];
+    $('.save-status__text', el).textContent = text || '';
+    if (ui.tab === 'settings' && d.state !== 'syncing') renderSettings();
+  }
+
+  async function cloudAction(action, el) {
+    switch (action) {
+      case 'cloud-connect': {
+        const input = $('#dbxKey');
+        if (input && !setError(input, input.value.trim() ? '' : t('required'))) return input.focus();
+        if (!window.crypto || !crypto.subtle) return toast(t('cloudNeedsHttps'), { tone: 'error' });
+        return Cloud.connect(input ? input.value : undefined);
+      }
+      case 'cloud-disconnect':
+        if (await ask(t('cloudDisconnectConfirm'), { okLabel: t('cloudDisconnect') })) { Store.unlinkCloud(); ui.cloudHistory = null; render(); }
+        return;
+      case 'sync-now': await Store.sync(); toast(t('stSynced', { t: '' })); return;
+      case 'copy-redirect':
+        try { await navigator.clipboard.writeText(Cloud.redirectUri()); toast(t('copied')); } catch (_) { toast(Cloud.redirectUri()); }
+        return;
+      case 'load-history':
+        ui.cloudHistory = 'loading'; renderCloudHistory();
+        try { ui.cloudHistory = await Store.listHistory(); } catch (e) { ui.cloudHistory = null; toast(e.message, { tone: 'error' }); }
+        renderCloudHistory();
+        return;
+    }
+    if (el.dataset.snapDownload || el.dataset.snapRestore) {
+      const path = el.dataset.snapDownload || el.dataset.snapRestore;
+      let snap;
+      try { snap = await Store.downloadHistory(path); } catch (e) { return toast(e.message, { tone: 'error' }); }
+      if (!snap) return toast(t('importFailed'), { tone: 'error' });
+      const name = path.split('/').pop();
+      if (el.dataset.snapDownload) return download(`royal-inventory-${name}`, JSON.stringify(snap.data, null, 1), 'application/json');
+      if (await ask(t('snapRestoreConfirm', { d: name.replace(/\.json$/, '') }), { okLabel: t('restore') })) { Store.replaceAll(snap.data); toast(t('restored')); }
+    }
+  }
+
+  $('#setUser').addEventListener('change', (e) => { try { localStorage.setItem('royal-user', e.target.value.trim()); } catch (_) {} });
+
   /* ---------- Toasts & confirm ---------- */
   function toast(msg, { undo, tone } = {}) {
     const el = document.createElement('div');
@@ -354,13 +520,13 @@
     <footer class="dialog__foot"><span class="spacer"></span><button class="btn btn--ghost" value="no"></button><button class="btn" value="yes"></button></footer></form>`;
   document.body.appendChild(confirmDlg);
 
-  function ask(message, { danger = false, word = null, okLabel } = {}) {
+  function ask(message, { danger = false, word = null, okLabel, cancelLabel } = {}) {
     return new Promise((resolve) => {
       $('.confirm-msg', confirmDlg).textContent = message;
       const input = $('.confirm-word', confirmDlg);
       input.hidden = !word; input.value = '';
       const [no, yes] = $$('button', confirmDlg);
-      no.textContent = t('cancel');
+      no.textContent = cancelLabel || t('cancel');
       yes.textContent = okLabel || (danger ? t('delete') : 'OK');
       yes.className = 'btn ' + (danger ? 'btn--danger' : 'btn--gold');
       confirmDlg.onclose = () => {
@@ -510,7 +676,7 @@
     const after = Math.round((r.final - entry.qty) * 100) / 100;
     if (after < 0 && !(await ask(t('wouldGoNegative', { v: fmt(after) }), { okLabel: t('addWithdrawal') }))) return;
     const w = Store.addWithdrawal({ ...entry, cardId: card.id });
-    toast(t('savedWithdrawal', { id: w.id, v: fmt(data().runningAfter.get(w.id)) }), { undo: () => Store.deleteWithdrawal(w.id) });
+    toast(t('savedWithdrawal', { id: w.id, v: fmt(data().runningAfter.get(w.uid)) }), { undo: () => Store.deleteWithdrawal(w.uid) });
     ['cardNo', 'qty', 'notes', ...FABRIC].forEach((k) => { wForm[k].value = ''; });
     lastAuto = { itemNo: '', name: '', origin: '' };
     updateWithdrawalPreview();
@@ -536,12 +702,12 @@
   /* ---------- Withdrawal edit dialog ---------- */
   const wDialog = $('#wDialog');
   const wEdit = $('#wEditForm');
-  function openWithdrawalDialog(id) {
-    const w = Store.state.withdrawals.find((x) => x.id === id);
+  function openWithdrawalDialog(wuid) {
+    const w = Store.state.withdrawals.find((x) => x.uid === wuid);
     const c = Store.state.cards.find((x) => x.id === w.cardId);
     $$('[aria-invalid]', wEdit).forEach((i) => setError(i, ''));
     $('#wDialogTitle').textContent = `${t('editWithdrawal')} · ${w.id}`;
-    wEdit.id.value = w.id; wEdit.date.value = w.date; wEdit.cardNo.value = c ? c.cardNo : '';
+    wEdit.id.value = w.uid; wEdit.date.value = w.date; wEdit.cardNo.value = c ? c.cardNo : '';
     wEdit.qty.value = w.qty; wEdit.notes.value = w.notes;
     FABRIC.forEach((k) => { wEdit[k].value = w[k] ?? (c ? c[k] : ''); });
     wDialog.showModal();
@@ -605,17 +771,30 @@
       const c = Store.state.cards.find((x) => x.id === ds.delCard);
       const n = Store.state.withdrawals.filter((w) => w.cardId === c.id).length;
       if (!(await ask(t('confirmDeleteCard', { c: c.cardNo, n }), { danger: true }))) return;
-      const snap = Store.deleteCard(c.id);
-      toast(t('deletedCard', { c: c.cardNo, n }), { undo: () => Store.restoreCard(snap) });
+      Store.deleteCard(c.id);
+      toast(t('deletedCard', { c: c.cardNo, n }), { undo: () => Store.restoreCard(c.id) });
       return;
     }
     if (ds.delW) {
-      if (!(await ask(t('confirmDeleteWithdrawal', { id: ds.delW }), { danger: true }))) return;
-      const snap = Store.deleteWithdrawal(ds.delW);
-      toast(t('deletedWithdrawal', { id: ds.delW }), { undo: () => Store.restoreWithdrawal(snap) });
+      const w = Store.state.withdrawals.find((x) => x.uid === ds.delW);
+      if (!(await ask(t('confirmDeleteWithdrawal', { id: w.id }), { danger: true }))) return;
+      Store.deleteWithdrawal(w.uid);
+      toast(t('deletedWithdrawal', { id: w.id }), { undo: () => Store.restoreWithdrawal(w.uid) });
       return;
     }
+    if (ds.restoreCard) { Store.restoreCard(ds.restoreCard); toast(t('restored')); return; }
+    if (ds.restoreW) { Store.restoreWithdrawal(ds.restoreW); toast(t('restored')); return; }
 
+    if (ds.snapDownload || ds.snapRestore || ['cloud-connect', 'cloud-disconnect', 'sync-now', 'copy-redirect', 'load-history'].includes(ds.action)) return cloudAction(ds.action, el);
+    if (ds.action === 'export-asof') {
+      const rows = asOfRows();
+      return download(`stock-as-of-${ui.asOf.date}.csv`, toCsv([[t('cardNo'), t('itemNo'), t('fabricName'), t('origin'), t('openingStock'), t('asOfWithdrawn'), t('asOfBalance'), t('stockAlert')],
+        ...rows.map((r) => [r.card.cardNo, r.card.itemNo, r.card.name, r.card.origin, r.opening, r.withdrawn, r.balance, t(statusKey[r.status])])], true));
+    }
+    if (ds.action === 'export-period') {
+      return download(`withdrawals-summary-${ui.period.from}-to-${ui.period.to}.csv`, toCsv([[t('itemNo'), t('fabricName'), t('origin'), t('periodCount'), t('cardsCount'), t('wQty')],
+        ...periodRows().map((g) => [g.itemNo, g.name, g.origin, g.count, g.cards.size, g.qty])], true));
+    }
     switch (ds.action) {
       case 'add-card': return openCardDialog();
       case 'goto-settings': return showTab('settings');
@@ -632,7 +811,6 @@
   });
 
   /* ---------- Filters & search ---------- */
-  const debounce = (fn, ms = 160) => { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }; };
   $('#invSearch').addEventListener('input', debounce((e) => { ui.inv.q = e.target.value; ui.inv.page = 1; render(); }));
   $('#invOrigin').addEventListener('change', (e) => { ui.inv.origin = e.target.value; ui.inv.page = 1; render(); });
   $('#invStatus').addEventListener('change', (e) => { ui.inv.status = e.target.value; ui.inv.page = 1; render(); });
@@ -655,7 +833,7 @@
   $('#langToggle').addEventListener('click', () => {
     const next = I18N.lang === 'ar' ? 'en' : 'ar';
     I18N.set(next);
-    Store.setSettings({ lang: next });
+    try { localStorage.setItem('royal-lang', next); } catch (_) {}
     applyI18n();
     render();
   });
@@ -751,7 +929,6 @@
       try { obj = JSON.parse(text); if (!Array.isArray(obj.cards)) throw 0; } catch (_) { return toast(t('importFailed'), { tone: 'error' }); }
       if (!(await ask(t('restoreConfirm')))) return;
       Store.replaceAll(obj);
-      I18N.set(Store.state.settings.lang); applyI18n();
       return toast(t('restoreDone', { c: obj.cards.length, w: (obj.withdrawals || []).length }));
     }
     const rows = parseCsv(text);
@@ -806,26 +983,35 @@
 
   /* ---------- Save status & boot ---------- */
   let renderQueued = false;
-  Store.on((type) => {
+  Store.on((type, detail) => {
     if (type === 'change') {
       ui.data = null;
       // Batch bursts of mutations (imports, demo data) into a single paint.
       if (!renderQueued) { renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
       return;
     }
-    const el = $('#saveStatus');
-    el.dataset.state = type;
-    $('.save-status__text', el).textContent = t(type === 'saving' ? 'saving' : type === 'saved' ? 'saved' : 'saveError');
+    if (type === 'status') showStatus(detail);
   });
 
   $('#year').textContent = new Date().getFullYear();
 
-  Store.load().then(() => {
-    I18N.set(Store.state.settings.lang || 'ar');
+  Store.load().then(async () => {
+    let lang = 'ar';
+    try { lang = localStorage.getItem('royal-lang') || 'ar'; } catch (_) {}
+    I18N.set(lang);
     applyI18n();
+    let linked = false;
+    try { linked = await Cloud.handleRedirect(); } catch (e) { toast(e.message, { tone: 'error' }); }
     let start = location.hash.slice(1);
     if (!TABS.includes(start)) { try { start = localStorage.getItem('royal-tab'); } catch (_) {} }
     showTab(TABS.includes(start) ? start : 'dashboard', { push: !!start });
     document.body.classList.add('is-ready');
+    if (linked) {
+      try {
+        await Store.linkCloud((r) => ask(t('cloudChoice', { c: nf0.format(r.cards), w: nf0.format(r.withdrawals) }), { danger: true, okLabel: t('cloudUseLocal'), cancelLabel: t('cloudUseRemote') }));
+        toast(t('cloudLinked'));
+      } catch (e) { toast(e.message, { tone: 'error' }); }
+    } else if (Cloud.connected()) Store.sync();
+    else Store.setStatus();
   });
 })();

@@ -13,8 +13,9 @@ Plain HTML/CSS/JS with no build step and no dependencies.
 | Dashboard · لوحة التحكم | KPIs, card lookup, alerts, search & group by item number |
 | Withdrawals · صفحة السحوبات | Fast withdrawal entry (auto-fills fabric details) + searchable log |
 | Inventory · صفحة الجرد | All fabric cards with calculated balances, physical counts, variance and alerts |
+| History & Archive · السجل والأرشيف | Stock on any past date, withdrawal summary for a period, deleted-records archive, daily Dropbox copies |
 | User Guide · دليل الاستخدام | Workflow and calculation rules |
-| Settings · الإعدادات | Low-stock threshold, CSV import, JSON backup/restore |
+| Settings · الإعدادات | Dropbox connection, low-stock threshold, user name, CSV import, JSON backup/restore |
 
 ## Calculations
 - Calculated balance = opening stock − total withdrawals
@@ -22,16 +23,27 @@ Plain HTML/CSS/JS with no build step and no dependencies.
 - Final available = physical count − withdrawals after the count date (or the calculated balance when there is no count)
 - Alerts: negative, out (0), low (≤ threshold, default 5 m), variance
 
-## Data
-Data is saved automatically in the browser (IndexedDB) **on each device separately**.
-Use Settings → *Download Backup* regularly. Excel data can be imported as “CSV UTF-8” using the downloadable templates.
-To share live data across several devices/users, a backend (e.g. Supabase or Firebase) can replace `assets/js/store.js` without changing the UI.
+## Data & Dropbox
+Every change is saved instantly in the browser (IndexedDB) and, once Dropbox is connected, uploaded to
+`Dropbox/Apps/<your app>/royal-inventory.json`. A full copy is also written to `history/YYYY-MM-DD.json` each day.
+Devices connected to the same Dropbox account share one inventory; edits made at the same time are merged
+(each change is replayed on top of the latest Dropbox copy). Changes made offline upload automatically later.
+Deleted cards/withdrawals go to an archive and can be restored.
+
+### One-time Dropbox setup
+1. https://www.dropbox.com/developers/apps → **Create app** → *Scoped access* → *App folder* → name it (e.g. RoyalInventory).
+2. **Permissions** tab: enable `files.metadata.read`, `files.content.read`, `files.content.write` → Submit.
+3. **Settings** tab → *OAuth 2 Redirect URIs*: add your site URL exactly, e.g. `https://your-site.netlify.app/`.
+4. Copy the **App key** (not the secret) into `assets/js/config.js` → `dropboxAppKey` (or paste it in the app's Settings on each device).
+5. On each device: Settings → **Connect Dropbox**, sign in with the shop's Dropbox account.
 
 ## Files
 ```
 index.html            markup, dialogs, icon sprite
 assets/css/styles.css design tokens + components (black / gold / ivory)
 assets/js/i18n.js     Arabic & English strings
-assets/js/store.js    persistence + stock calculations
+assets/js/config.js   site settings (Dropbox App key)
+assets/js/dropbox.js  Dropbox OAuth (PKCE) + file API
+assets/js/store.js    operations, local persistence, Dropbox sync, calculations
 assets/js/app.js      rendering, forms, import/export
 ```

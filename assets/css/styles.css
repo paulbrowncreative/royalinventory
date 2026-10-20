@@ -164,7 +164,7 @@ html[lang="en"] .masthead__title h1 { font-family: var(--font-display-en); font-
 .tabs { padding-bottom: var(--s-4); }
 .tabs__list {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--s-2);
 }
 .tab {
@@ -650,3 +650,30 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 }
 .table--inv td:nth-child(12) { white-space: nowrap; }
 .form-note { grid-column: 1 / -1; color: var(--gold-light); }
+
+/* History & cloud */
+.panel-intro { font-size: var(--fs-sm); margin: calc(var(--s-2) * -1) 0 var(--s-4); max-width: 80ch; }
+.summary-strip { display: flex; flex-wrap: wrap; gap: var(--s-5); margin-bottom: var(--s-3); font-size: var(--fs-sm); color: var(--text-2); }
+.summary-strip strong { color: var(--gold-light); font-size: var(--fs-md); }
+.row-total th, .row-total td { background: #e6dcc4; font-weight: 700; }
+.att-item--static { cursor: default; }
+.att-item--static:hover { background: rgba(255, 255, 255, 0.02); border-color: var(--line); }
+.att-item small { color: var(--muted); }
+.card-panel--cloud { grid-column: 1 / -1; border-color: var(--line-strong); background: radial-gradient(80% 140% at 100% 0%, rgba(212, 175, 98, 0.09), transparent 60%), linear-gradient(180deg, var(--surface-2), var(--surface)); }
+.cloud-state { display: inline-flex; align-items: center; gap: var(--s-2); font-weight: 600; color: var(--text-2); }
+.cloud-state .icon { width: 22px; height: 22px; color: var(--muted); }
+.cloud-state--on { color: var(--pos-dk); }
+.cloud-state--on .icon { color: var(--pos-dk); }
+.cloud-facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s-3); }
+.cloud-facts div { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s-3); }
+.cloud-facts dt { font-size: var(--fs-xs); color: var(--muted); }
+.cloud-facts dd { margin: 2px 0 0; font-weight: 600; justify-self: start; }
+.cloud-steps { margin: 0; padding-inline-start: var(--s-5); display: grid; gap: var(--s-2); color: var(--text-2); font-size: var(--fs-sm); }
+.cloud-steps li::marker { color: var(--gold); font-weight: 700; }
+.cloud-steps a { color: var(--gold-light); }
+.cloud-steps code, .copy-code { display: inline-block; margin-inline: var(--s-2); padding: 2px 8px; border-radius: var(--r-sm); background: var(--surface-3); border: 1px solid var(--line); color: var(--gold-light); font-size: var(--fs-xs); word-break: break-all; }
+.save-status[data-state="pending"] .dot, .save-status[data-state="offline"] .dot { background: var(--warn-dk); box-shadow: 0 0 0 3px rgba(240, 181, 82, 0.2); }
+.save-status[data-state="sync-error"] .dot, .save-status[data-state="auth"] .dot { background: var(--neg-dk); }
+.save-status[data-state="sync-error"], .save-status[data-state="auth"] { color: var(--neg-dk); }
+.save-status[data-state="local"] .dot { background: var(--gold); box-shadow: 0 0 0 3px rgba(212, 175, 98, 0.2); }
+@media (max-width: 1100px) { .tab { padding-inline: var(--s-3); font-size: var(--fs-sm); } }

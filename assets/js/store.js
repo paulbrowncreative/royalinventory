@@ -1,26 +1,69 @@
-/* Data layer: persistence (IndexedDB with localStorage fallback) and stock calculations. */
+/* Data layer: local persistence (IndexedDB), Dropbox sync, history, and stock calculations.
+ *
+ * Every change is an operation ("op") applied by a pure reducer. Ops made while Dropbox is
+ * connected are queued until uploaded; if another device saved first, the remote copy is
+ * downloaded and the queued ops are replayed on top of it, so concurrent edits are not lost.
+ */
 (function () {
   const DB_NAME = 'royal-inventory';
   const STORE = 'state';
   const KEY = 'main';
+  const META_KEY = 'sync';
   const LS_KEY = 'royal-inventory-state';
+  const MAIN_FILE = '/royal-inventory.json';
+  const HISTORY_DIR = '/history';
   const EPS = 0.0001;
 
   const blank = () => ({
-    version: 1,
-    settings: { lowThreshold: 5, lang: 'ar' },
+    version: 2,
+    settings: { lowThreshold: 5 },
     cards: [],
     withdrawals: [],
-    seq: { card: 0, withdrawal: 0 },
+    trash: { cards: [], withdrawals: [] },
+    seq: { withdrawal: 0 },
     updatedAt: null,
   });
+  const blankMeta = () => ({ rev: null, pending: [], lastSync: null, lastSnapshot: null });
 
   let state = blank();
+  let meta = blankMeta();
   let db = null;
   let saveTimer = null;
+  let syncTimer = null;
+  let syncing = false;
+  let syncAgain = false;
   const listeners = new Set();
   const channel = 'BroadcastChannel' in window ? new BroadcastChannel('royal-inventory') : null;
 
+  /* ---------- Helpers ---------- */
+  const num = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+  };
+  const round = (n) => Math.round(n * 100) / 100;
+  const norm = (s) => String(s || '').trim().toUpperCase();
+  const today = () => {
+    const d = new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  };
+  const uid = (p) => p + '-' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+  const userName = () => { try { return localStorage.getItem('royal-user') || ''; } catch (_) { return ''; } };
+
+  function normalize(raw) {
+    const s = Object.assign(blank(), raw || {});
+    s.settings = { lowThreshold: num((raw && raw.settings && raw.settings.lowThreshold)) ?? 5 };
+    s.seq = { withdrawal: (raw && raw.seq && raw.seq.withdrawal) || 0 };
+    s.cards = Array.isArray(s.cards) ? s.cards : [];
+    s.withdrawals = Array.isArray(s.withdrawals) ? s.withdrawals : [];
+    s.trash = Object.assign({ cards: [], withdrawals: [] }, s.trash || {});
+    // v1 records had no stable uid; reuse the display id.
+    s.withdrawals.forEach((w) => { if (!w.uid) w.uid = 'w-' + w.id; });
+    s.version = 2;
+    return s;
+  }
+
+  /* ---------- Local persistence ---------- */
   function openDb() {
     return new Promise((resolve, reject) => {
       if (!('indexedDB' in window)) return reject(new Error('no idb'));
@@ -30,82 +73,145 @@
       req.onerror = () => reject(req.error);
     });
   }
-
-  function idbGet() {
+  function idb(mode, fn) {
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const req = tx.objectStore(STORE).get(KEY);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  function idbPut(value) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(value, KEY);
-      tx.oncomplete = () => resolve();
+      const tx = db.transaction(STORE, mode);
+      const req = fn(tx.objectStore(STORE));
+      tx.oncomplete = () => resolve(req && req.result);
       tx.onerror = () => reject(tx.error);
     });
   }
-
-  function normalize(raw) {
-    const s = Object.assign(blank(), raw || {});
-    s.settings = Object.assign(blank().settings, s.settings || {});
-    s.seq = Object.assign(blank().seq, s.seq || {});
-    s.cards = Array.isArray(s.cards) ? s.cards : [];
-    s.withdrawals = Array.isArray(s.withdrawals) ? s.withdrawals : [];
-    return s;
+  async function readLocal() {
+    if (db) {
+      const [s, m] = await Promise.all([idb('readonly', (st) => st.get(KEY)), idb('readonly', (st) => st.get(META_KEY))]);
+      return { s, m };
+    }
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch (_) { return {}; }
   }
 
   async function load() {
-    try {
-      db = await openDb();
-      state = normalize(await idbGet());
-    } catch (e) {
-      db = null;
-      try { state = normalize(JSON.parse(localStorage.getItem(LS_KEY))); } catch (_) { state = blank(); }
-    }
+    try { db = await openDb(); } catch (_) { db = null; }
+    const { s, m } = await readLocal();
+    state = normalize(s);
+    meta = Object.assign(blankMeta(), m || {});
     return state;
   }
 
-  function emit(type) { listeners.forEach((fn) => fn(type)); }
+  function emit(type, detail) { listeners.forEach((fn) => fn(type, detail)); }
 
   async function persist() {
-    emit('saving');
     try {
-      if (db) await idbPut(state);
-      else localStorage.setItem(LS_KEY, JSON.stringify(state));
-      emit('saved');
+      if (db) await idb('readwrite', (st) => { st.put(state, KEY); st.put(meta, META_KEY); });
+      else localStorage.setItem(LS_KEY, JSON.stringify({ s: state, m: meta }));
       if (channel) channel.postMessage('changed');
+      if (!Cloud.connected()) emit('status', { state: 'local' });
     } catch (e) {
       console.error(e);
-      emit('save-error');
+      emit('status', { state: 'save-error' });
     }
   }
-
-  function commit() {
-    state.updatedAt = new Date().toISOString();
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(persist, 250);
-    emit('change');
-  }
+  function schedulePersist() { clearTimeout(saveTimer); saveTimer = setTimeout(persist, 250); }
 
   if (channel) {
     channel.onmessage = async () => {
-      if (db) state = normalize(await idbGet());
-      else try { state = normalize(JSON.parse(localStorage.getItem(LS_KEY))); } catch (_) {}
+      const { s, m } = await readLocal();
+      state = normalize(s);
+      meta = Object.assign(blankMeta(), m || {});
       emit('change');
     };
   }
 
-  const num = (v) => {
-    if (v === null || v === undefined || v === '') return null;
-    const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-    return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
-  };
-  const round = (n) => Math.round(n * 100) / 100;
-  const norm = (s) => String(s || '').trim().toUpperCase();
+  /* ---------- Reducer ---------- */
+  function trashCardWithdrawal(s, w) {
+    const entry = s.trash.cards.find((e) => e.card.id === w.cardId);
+    if (entry) entry.withdrawals.push(w);
+  }
+
+  function apply(s, op) {
+    const p = op.p;
+    switch (op.type) {
+      case 'card.upsert': {
+        const card = s.cards.find((c) => c.id === p.id);
+        if (card) Object.assign(card, p.fields, { updatedAt: op.at });
+        else if (!s.trash.cards.some((e) => e.card.id === p.id)) {
+          s.cards.push(Object.assign({ id: p.id, physical: null, physicalDate: '', createdAt: op.at, by: op.by }, p.fields, { updatedAt: op.at }));
+        }
+        break;
+      }
+      case 'card.count': {
+        const card = s.cards.find((c) => c.id === p.cardId);
+        if (card) Object.assign(card, { physical: p.physical, physicalDate: p.physicalDate, countedBy: op.by, updatedAt: op.at });
+        break;
+      }
+      case 'card.delete': {
+        const i = s.cards.findIndex((c) => c.id === p.cardId);
+        if (i < 0) break;
+        const [card] = s.cards.splice(i, 1);
+        const ws = s.withdrawals.filter((w) => w.cardId === card.id);
+        s.withdrawals = s.withdrawals.filter((w) => w.cardId !== card.id);
+        s.trash.cards.push({ card, withdrawals: ws, deletedAt: op.at, by: op.by });
+        break;
+      }
+      case 'card.restore': {
+        const i = s.trash.cards.findIndex((e) => e.card.id === p.cardId);
+        if (i < 0) break;
+        const [e] = s.trash.cards.splice(i, 1);
+        s.cards.push(e.card);
+        s.withdrawals.push(...e.withdrawals);
+        break;
+      }
+      case 'w.add': {
+        if (s.withdrawals.some((w) => w.uid === p.w.uid)) break; // idempotent on replay
+        s.seq.withdrawal += 1;
+        const w = Object.assign({}, p.w, {
+          id: 'W-' + String(s.seq.withdrawal).padStart(6, '0'),
+          seq: s.seq.withdrawal, createdAt: op.at, by: op.by,
+        });
+        if (s.cards.some((c) => c.id === w.cardId)) s.withdrawals.push(w);
+        else trashCardWithdrawal(s, w);
+        break;
+      }
+      case 'w.update': {
+        const w = s.withdrawals.find((x) => x.uid === p.uid);
+        if (w) Object.assign(w, p.fields, { updatedAt: op.at, updatedBy: op.by });
+        break;
+      }
+      case 'w.delete': {
+        const i = s.withdrawals.findIndex((x) => x.uid === p.uid);
+        if (i < 0) break;
+        const [w] = s.withdrawals.splice(i, 1);
+        s.trash.withdrawals.push({ w, deletedAt: op.at, by: op.by });
+        break;
+      }
+      case 'w.restore': {
+        const i = s.trash.withdrawals.findIndex((e) => e.w.uid === p.uid);
+        if (i < 0) break;
+        const [e] = s.trash.withdrawals.splice(i, 1);
+        if (s.cards.some((c) => c.id === e.w.cardId)) s.withdrawals.push(e.w);
+        break;
+      }
+      case 'settings':
+        Object.assign(s.settings, p);
+        break;
+      case 'replace': {
+        const fresh = normalize(JSON.parse(JSON.stringify(p.state)));
+        Object.keys(s).forEach((k) => delete s[k]);
+        Object.assign(s, fresh);
+        break;
+      }
+    }
+    s.updatedAt = op.at;
+    return s;
+  }
+
+  function dispatch(type, p) {
+    const op = { type, p, at: new Date().toISOString(), by: userName() };
+    apply(state, op);
+    if (Cloud.connected()) { meta.pending.push(op); scheduleSync(1200); }
+    schedulePersist();
+    emit('change');
+    return op;
+  }
 
   /* ---------- Calculations ---------- */
   // Recomputed per render; O(cards + withdrawals) so it stays fast at tens of thousands of rows.
@@ -116,7 +222,7 @@
     state.withdrawals.forEach((w) => { const e = byCard.get(w.cardId); if (e) e.list.push(w); });
 
     const rows = [];
-    const runningAfter = new Map(); // withdrawal id -> card balance after it
+    const runningAfter = new Map(); // withdrawal uid -> card balance after it
     byCard.forEach(({ card, list }) => {
       list.sort((a, b) => (a.date === b.date ? a.seq - b.seq : a.date < b.date ? -1 : 1));
       const opening = card.opening || 0;
@@ -126,21 +232,17 @@
         total += w.qty;
         if (hasCount && w.date > card.physicalDate) {
           after += w.qty;
-          runningAfter.set(w.id, round(card.physical - after));
+          runningAfter.set(w.uid, round(card.physical - after));
         } else {
           before += w.qty;
-          runningAfter.set(w.id, round(opening - before));
+          runningAfter.set(w.uid, round(opening - before));
         }
       });
       const calc = round(opening - total);
       const variance = hasCount ? round(card.physical - (opening - before)) : null;
       const final = hasCount ? round(card.physical - after) : calc;
-      let status = 'ok';
-      if (final < -EPS) status = 'negative';
-      else if (Math.abs(final) <= EPS) status = 'out';
-      else if (final <= threshold + EPS) status = 'low';
       rows.push({
-        card, opening, total: round(total), calc, variance, final, status,
+        card, opening, total: round(total), calc, variance, final, status: statusOf(final, threshold),
         hasVariance: variance !== null && Math.abs(variance) > EPS,
         count: list.length, list,
       });
@@ -169,19 +271,58 @@
     return { rows, rowByCardId, items, totals, runningAfter, threshold };
   }
 
-  /* ---------- Mutations ---------- */
-  const today = () => {
-    const d = new Date();
-    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  };
+  function statusOf(final, threshold) {
+    if (final < -EPS) return 'negative';
+    if (Math.abs(final) <= EPS) return 'out';
+    if (final <= threshold + EPS) return 'low';
+    return 'ok';
+  }
 
+  // Stock of every card as it stood at the end of `date` (uses the latest physical count on or before it).
+  function computeAsOf(date) {
+    const threshold = num(state.settings.lowThreshold) ?? 5;
+    const counted = (c) => c.physical !== null && c.physical !== undefined && c.physicalDate && c.physicalDate <= date;
+    const cards = new Map(state.cards.map((c) => [c.id, c]));
+    const sums = new Map();
+    state.withdrawals.forEach((w) => {
+      const c = cards.get(w.cardId);
+      if (!c || w.date > date) return;
+      const e = sums.get(w.cardId) || { all: 0, afterCount: 0 };
+      e.all += w.qty;
+      if (counted(c) && w.date > c.physicalDate) e.afterCount += w.qty;
+      sums.set(w.cardId, e);
+    });
+    return state.cards.filter((c) => !c.entryDate || c.entryDate <= date).map((c) => {
+      const e = sums.get(c.id) || { all: 0, afterCount: 0 };
+      const balance = round(counted(c) ? c.physical - e.afterCount : (c.opening || 0) - e.all);
+      return { card: c, opening: c.opening || 0, withdrawn: round(e.all), balance, counted: counted(c), status: statusOf(balance, threshold) };
+    });
+  }
+
+  // Withdrawal totals per item between two dates (inclusive).
+  function periodSummary(from, to) {
+    const cards = new Map(state.cards.map((c) => [c.id, c]));
+    const groups = new Map();
+    state.withdrawals.forEach((w) => {
+      if ((from && w.date < from) || (to && w.date > to)) return;
+      const c = cards.get(w.cardId) || {};
+      const itemNo = w.itemNo || c.itemNo || '—';
+      const k = norm(itemNo);
+      if (!groups.has(k)) groups.set(k, { itemNo, name: w.name || c.name || '', origin: w.origin || c.origin || '', count: 0, qty: 0, cards: new Set() });
+      const g = groups.get(k);
+      g.count++; g.qty = round(g.qty + w.qty); g.cards.add(w.cardId);
+    });
+    return [...groups.values()];
+  }
+
+  /* ---------- Public mutations ---------- */
   function findCardByNo(no) {
     const n = norm(no);
     return n ? state.cards.find((c) => norm(c.cardNo) === n) : undefined;
   }
 
   function upsertCard(data) {
-    const clean = {
+    const fields = {
       cardNo: String(data.cardNo || '').trim(),
       entryDate: data.entryDate || today(),
       itemNo: String(data.itemNo || '').trim(),
@@ -189,106 +330,191 @@
       origin: String(data.origin || '').trim(),
       opening: num(data.opening) ?? 0,
     };
-    let card;
-    if (data.id) {
-      card = state.cards.find((c) => c.id === data.id);
-      Object.assign(card, clean);
-    } else {
-      state.seq.card += 1;
-      card = Object.assign({ id: 'c' + state.seq.card + '-' + Date.now().toString(36), physical: null, physicalDate: '' }, clean);
-      state.cards.push(card);
-    }
     if ('physical' in data) {
-      card.physical = num(data.physical);
-      card.physicalDate = card.physical === null ? '' : data.physicalDate || today();
+      fields.physical = num(data.physical);
+      fields.physicalDate = fields.physical === null ? '' : data.physicalDate || today();
     }
-    commit();
-    return card;
+    const id = data.id || uid('c');
+    dispatch('card.upsert', { id, fields });
+    return state.cards.find((c) => c.id === id);
   }
 
   function setPhysical(cardId, physical, date) {
-    const card = state.cards.find((c) => c.id === cardId);
-    card.physical = num(physical);
-    card.physicalDate = card.physical === null ? '' : date || today();
-    commit();
-    return card;
-  }
-
-  function deleteCard(cardId) {
-    const idx = state.cards.findIndex((c) => c.id === cardId);
-    const card = state.cards[idx];
-    const removed = state.withdrawals.filter((w) => w.cardId === cardId);
-    state.cards.splice(idx, 1);
-    state.withdrawals = state.withdrawals.filter((w) => w.cardId !== cardId);
-    commit();
-    return { card, removed, idx };
-  }
-
-  function restoreCard({ card, removed, idx }) {
-    state.cards.splice(Math.min(idx, state.cards.length), 0, card);
-    state.withdrawals.push(...removed);
-    commit();
+    const v = num(physical);
+    dispatch('card.count', { cardId, physical: v, physicalDate: v === null ? '' : date || today() });
+    return state.cards.find((c) => c.id === cardId);
   }
 
   // Fabric details are typed on each withdrawal; blanks fall back to the card's own details.
-  function fabricFields(data) {
+  function withdrawalFields(data) {
     const card = state.cards.find((c) => c.id === data.cardId) || {};
     const pick = (k) => String(data[k] ?? '').trim() || card[k] || '';
-    return { itemNo: pick('itemNo'), name: pick('name'), origin: pick('origin') };
+    return {
+      date: data.date || today(), cardId: data.cardId, qty: num(data.qty),
+      notes: String(data.notes || '').trim(), itemNo: pick('itemNo'), name: pick('name'), origin: pick('origin'),
+    };
   }
 
   function addWithdrawal(data) {
-    state.seq.withdrawal += 1;
-    const w = {
-      id: 'W-' + String(state.seq.withdrawal).padStart(6, '0'),
-      seq: state.seq.withdrawal,
-      date: data.date || today(),
-      cardId: data.cardId,
-      qty: num(data.qty),
-      notes: String(data.notes || '').trim(),
-      ...fabricFields(data),
-    };
-    state.withdrawals.push(w);
-    commit();
-    return w;
+    const w = Object.assign({ uid: uid('w') }, withdrawalFields(data));
+    dispatch('w.add', { w });
+    return state.withdrawals.find((x) => x.uid === w.uid);
   }
 
-  function updateWithdrawal(id, data) {
-    const w = state.withdrawals.find((x) => x.id === id);
-    Object.assign(w, { date: data.date, cardId: data.cardId, qty: num(data.qty), notes: String(data.notes || '').trim(), ...fabricFields(data) });
-    commit();
-    return w;
+  function updateWithdrawal(wuid, data) {
+    dispatch('w.update', { uid: wuid, fields: withdrawalFields(data) });
+    return state.withdrawals.find((x) => x.uid === wuid);
   }
 
-  function deleteWithdrawal(id) {
-    const idx = state.withdrawals.findIndex((w) => w.id === id);
-    const [w] = state.withdrawals.splice(idx, 1);
-    commit();
-    return { w, idx };
+  /* ---------- Dropbox sync ---------- */
+  function setStatus() {
+    if (!Cloud.connected()) return emit('status', { state: 'local' });
+    if (syncing) return emit('status', { state: 'syncing' });
+    if (meta.pending.length) return emit('status', { state: navigator.onLine ? 'pending' : 'offline', pending: meta.pending.length });
+    emit('status', { state: 'synced', at: meta.lastSync });
   }
 
-  function restoreWithdrawal({ w, idx }) {
-    state.withdrawals.splice(Math.min(idx, state.withdrawals.length), 0, w);
-    commit();
+  function scheduleSync(ms = 0) {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => sync(), ms);
   }
 
-  function setSettings(patch) {
-    Object.assign(state.settings, patch);
-    commit();
+  async function snapshot(force) {
+    const d = today();
+    const last = meta.lastSnapshot;
+    // One file per day, refreshed at most every 15 minutes; Dropbox also keeps each file's versions.
+    if (!force && last && last.date === d && Date.now() - new Date(last.at).getTime() < 15 * 60000) return;
+    try {
+      await Cloud.upload(`${HISTORY_DIR}/${d}.json`, JSON.stringify(state), 'overwrite');
+      meta.lastSnapshot = { date: d, at: new Date().toISOString() };
+    } catch (e) { console.warn('snapshot failed', e); }
   }
 
-  function replaceAll(raw) {
-    state = normalize(raw);
-    commit();
+  async function sync() {
+    if (!Cloud.connected()) return setStatus();
+    if (syncing) { syncAgain = true; return; }
+    syncing = true;
+    setStatus();
+    let changed = false;
+    try {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (!meta.pending.length) {
+          // Cheap metadata check first; only download when another device has saved.
+          const rev = await Cloud.rev(MAIN_FILE);
+          if (rev && rev === meta.rev) break;
+          const remote = rev ? await Cloud.download(MAIN_FILE) : null;
+          if (!remote) {
+            const r = await Cloud.upload(MAIN_FILE, JSON.stringify(state), null);
+            meta.rev = r.rev;
+            await snapshot(true);
+          } else if (remote.rev !== meta.rev && !meta.pending.length) {
+            state = normalize(remote.data);
+            meta.rev = remote.rev;
+            changed = true;
+          }
+          break;
+        }
+        const sent = meta.pending.length;
+        try {
+          const r = await Cloud.upload(MAIN_FILE, JSON.stringify(state), meta.rev);
+          meta.rev = r.rev;
+          meta.pending = meta.pending.slice(sent); // ops made during the upload stay queued
+          await snapshot();
+          if (!meta.pending.length) break;
+        } catch (e) {
+          if (!e.conflict) throw e;
+          // Another device saved first: rebuild from its copy and replay our queued ops.
+          const remote = await Cloud.download(MAIN_FILE);
+          const base = remote ? normalize(remote.data) : blank();
+          meta.pending.forEach((op) => apply(base, op));
+          state = base;
+          meta.rev = remote ? remote.rev : null;
+          changed = true;
+        }
+      }
+      meta.lastSync = new Date().toISOString();
+    } catch (e) {
+      console.warn('sync failed', e);
+      if (e.auth) emit('status', { state: 'auth' });
+      else emit('status', { state: navigator.onLine ? 'sync-error' : 'offline', pending: meta.pending.length });
+      syncing = false;
+      schedulePersist();
+      if (changed) emit('change');
+      return;
+    }
+    syncing = false;
+    schedulePersist();
+    if (changed) emit('change');
+    setStatus();
+    if (syncAgain) { syncAgain = false; scheduleSync(0); }
   }
+
+  // First connection on this device: decide between Dropbox's copy and this device's copy.
+  async function linkCloud(chooseLocal) {
+    syncing = true;
+    emit('status', { state: 'syncing' });
+    try {
+      const remote = await Cloud.download(MAIN_FILE);
+      const localHasData = state.cards.length || state.withdrawals.length;
+      if (!remote) {
+        meta.rev = (await Cloud.upload(MAIN_FILE, JSON.stringify(state), null)).rev;
+        await snapshot(true);
+      } else {
+        const r = normalize(remote.data);
+        const remoteHasData = r.cards.length || r.withdrawals.length;
+        if (localHasData && remoteHasData && (await chooseLocal({ cards: r.cards.length, withdrawals: r.withdrawals.length, updatedAt: r.updatedAt }))) {
+          // Keep a copy of what is being replaced before overwriting it.
+          await Cloud.upload(`${HISTORY_DIR}/replaced-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, JSON.stringify(r), 'overwrite');
+          meta.rev = (await Cloud.upload(MAIN_FILE, JSON.stringify(state), 'overwrite')).rev;
+          await snapshot(true);
+        } else if (remoteHasData || !localHasData) {
+          state = r;
+          meta.rev = remote.rev;
+        } else {
+          meta.rev = (await Cloud.upload(MAIN_FILE, JSON.stringify(state), remote.rev)).rev;
+          await snapshot(true);
+        }
+      }
+      meta.pending = [];
+      meta.lastSync = new Date().toISOString();
+    } finally {
+      syncing = false;
+      schedulePersist();
+      emit('change');
+      setStatus();
+    }
+  }
+
+  function unlinkCloud() {
+    Cloud.disconnect();
+    meta = blankMeta();
+    schedulePersist();
+    setStatus();
+  }
+
+  // Keep other devices' changes flowing in.
+  setInterval(() => { if (Cloud.connected() && document.visibilityState === 'visible') sync(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Cloud.connected()) sync(); });
+  window.addEventListener('online', () => Cloud.connected() && sync());
+  window.addEventListener('beforeunload', (e) => {
+    if (Cloud.connected() && meta.pending.length) { e.preventDefault(); e.returnValue = ''; }
+  });
 
   window.Store = {
-    load, compute, today, num, norm, findCardByNo,
-    upsertCard, setPhysical, deleteCard, restoreCard,
-    addWithdrawal, updateWithdrawal, deleteWithdrawal, restoreWithdrawal,
-    setSettings, replaceAll,
-    reset() { replaceAll(Object.assign(blank(), { settings: state.settings })); },
+    load, compute, computeAsOf, periodSummary, today, num, norm, findCardByNo,
+    upsertCard, setPhysical, addWithdrawal, updateWithdrawal,
+    deleteCard: (cardId) => dispatch('card.delete', { cardId }),
+    restoreCard: (cardId) => dispatch('card.restore', { cardId }),
+    deleteWithdrawal: (wuid) => dispatch('w.delete', { uid: wuid }),
+    restoreWithdrawal: (wuid) => dispatch('w.restore', { uid: wuid }),
+    setSettings: (patch) => dispatch('settings', patch),
+    replaceAll: (raw) => dispatch('replace', { state: normalize(raw) }),
+    reset() { dispatch('replace', { state: Object.assign(blank(), { settings: state.settings }) }); },
+    sync, linkCloud, unlinkCloud, setStatus,
+    listHistory: () => Cloud.list(HISTORY_DIR),
+    downloadHistory: (path) => Cloud.download(path),
     get state() { return state; },
+    get meta() { return meta; },
     on(fn) { listeners.add(fn); },
   };
 })();
