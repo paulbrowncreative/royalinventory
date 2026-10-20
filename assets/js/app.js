@@ -102,7 +102,7 @@
     $('#footUpdated').textContent = s.updatedAt ? new Date(s.updatedAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—';
     const cards = d.rows.map((r) => r.card).sort((a, b) => natural.compare(a.cardNo, b.cardNo));
     $('#cardList').innerHTML = cards.map((c) => `<option value="${esc(c.cardNo)}">${esc(c.name)} · ${esc(c.itemNo)}</option>`).join('');
-    const origins = [...new Set(s.cards.map((c) => c.origin).filter(Boolean))].sort();
+    const origins = [...new Set([...s.cards, ...s.withdrawals].map((x) => x.origin).filter(Boolean))].sort();
     $('#originList').innerHTML = origins.map((o) => `<option value="${esc(o)}">`).join('');
     $('#itemList').innerHTML = [...d.items.values()].map((g) => `<option value="${esc(g.itemNo)}">${esc(g.name)}</option>`).join('');
     const originOpts = (sel, val) => { sel.innerHTML = `<option value="">${t('allOrigins')}</option>` + origins.map((o) => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join(''); };
@@ -259,12 +259,17 @@
     const f = ui.log;
     const q = Store.norm(f.q);
     const cards = new Map(Store.state.cards.map((c) => [c.id, c]));
-    return Store.state.withdrawals.map((w) => ({ w, c: cards.get(w.cardId) })).filter(({ w, c }) => {
+    return Store.state.withdrawals.map((w) => {
+      const c = cards.get(w.cardId);
+      // Each withdrawal keeps the fabric details typed on it; older records fall back to the card.
+      const fab = c && { itemNo: w.itemNo || c.itemNo, name: w.name || c.name, origin: w.origin || c.origin };
+      return { w, c, fab };
+    }).filter(({ w, c, fab }) => {
       if (!c) return false;
-      if (f.origin && c.origin !== f.origin) return false;
+      if (f.origin && fab.origin !== f.origin) return false;
       if (f.from && w.date < f.from) return false;
       if (f.to && w.date > f.to) return false;
-      if (q && ![w.id, c.cardNo, c.itemNo, c.name, w.notes].some((v) => Store.norm(v).includes(q))) return false;
+      if (q && ![w.id, c.cardNo, fab.itemNo, fab.name, w.notes].some((v) => Store.norm(v).includes(q))) return false;
       return true;
     }).sort((a, b) => (a.w.date === b.w.date ? b.w.seq - a.w.seq : a.w.date < b.w.date ? 1 : -1));
   }
@@ -273,17 +278,17 @@
     const rows = filteredLog(d);
     $('#logCount').textContent = t('rowsShown', { n: nf0.format(rows.length) });
     const { slice, pager } = paginate(rows, ui.log, 'log');
-    $('#logBody').innerHTML = slice.length ? slice.map(({ w, c }) => {
+    $('#logBody').innerHTML = slice.length ? slice.map(({ w, c, fab }) => {
       const after = d.runningAfter.get(w.id);
-      const g = d.items.get(Store.norm(c.itemNo) || '—');
+      const g = d.items.get(Store.norm(fab.itemNo) || '—');
       const cls = after < 0 ? 'v-neg' : after <= d.threshold ? 'v-warn' : 'v-pos';
       return `<tr>
         <th scope="row" data-label="${t('wId')}" class="ltr-num muted-cell">${esc(w.id)}</th>
         <td data-label="${t('wDate')}" class="ltr-num">${esc(w.date)}</td>
         <td data-label="${t('cardNo')}" class="ltr-num"><button type="button" class="link-cell" data-lookup="${esc(c.cardNo)}">${esc(c.cardNo)}</button></td>
-        <td data-label="${t('itemNo')}" class="ltr-num">${esc(c.itemNo)}</td>
-        <td data-label="${t('fabricName')}">${esc(c.name)}</td>
-        <td data-label="${t('origin')}">${esc(c.origin || '—')}</td>
+        <td data-label="${t('itemNo')}" class="ltr-num">${esc(fab.itemNo)}</td>
+        <td data-label="${t('fabricName')}">${esc(fab.name)}</td>
+        <td data-label="${t('origin')}">${esc(fab.origin || '—')}</td>
         <td data-label="${t('wQty')}" class="num"><strong>${fmt(w.qty)}</strong></td>
         <td data-label="${t('wCardAfter')}" class="num"><strong class="${cls}">${fmt(after)}</strong></td>
         <td data-label="${t('wItemTotal')}" class="num"><span class="${g && g.final < 0 ? 'v-neg' : 'v-pos'}">${fmt(g ? g.final : null)}</span></td>
@@ -380,20 +385,22 @@
   const cardDialog = $('#cardDialog');
   const cardForm = $('#cardForm');
 
-  function openCardDialog(id) {
+  function openCardDialog(id, prefill = {}, note = '') {
     const card = id ? Store.state.cards.find((c) => c.id === id) : null;
     cardForm.reset();
     $$('[aria-invalid]', cardForm).forEach((i) => setError(i, ''));
     $('#cardDialogTitle').textContent = card ? `${t('editCard')} · ${card.cardNo}` : t('newCard');
     cardForm.id.value = card ? card.id : '';
-    cardForm.cardNo.value = card ? card.cardNo : suggestCardNo();
+    $('#cardNote').textContent = note;
+    $('#cardNote').hidden = !note;
+    cardForm.cardNo.value = card ? card.cardNo : prefill.cardNo || suggestCardNo();
     cardForm.entryDate.value = card ? card.entryDate : Store.today();
-    cardForm.itemNo.value = card ? card.itemNo : '';
-    cardForm.name.value = card ? card.name : '';
-    cardForm.origin.value = card ? card.origin : '';
+    cardForm.itemNo.value = card ? card.itemNo : prefill.itemNo || '';
+    cardForm.name.value = card ? card.name : prefill.name || '';
+    cardForm.origin.value = card ? card.origin : prefill.origin || '';
     cardForm.opening.value = card ? card.opening : '';
     cardDialog.showModal();
-    (card ? cardForm.opening : cardForm.itemNo).focus();
+    (card || prefill.itemNo ? cardForm.opening : cardForm.itemNo).focus();
   }
 
   function suggestCardNo() {
@@ -403,12 +410,8 @@
   }
 
   // Typing a known item number fills in its name and origin.
-  cardForm.itemNo.addEventListener('change', () => {
-    const g = data().items.get(Store.norm(cardForm.itemNo.value));
-    if (!g) return;
-    if (!cardForm.name.value) cardForm.name.value = g.name;
-    if (!cardForm.origin.value && g.origins.size) cardForm.origin.value = [...g.origins][0];
-  });
+  cardForm.itemNo.addEventListener('change', () => fillFromItem(cardForm));
+  cardDialog.addEventListener('close', () => { pendingWithdrawal = null; });
 
   cardForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -423,8 +426,11 @@
     ok = setError(f.opening, op === null ? t('required') : op < 0 ? t('nonNegative') : '') && ok;
     if (!ok) { $('[aria-invalid="true"]', f).focus(); return; }
     const card = Store.upsertCard({ id: id || undefined, cardNo: f.cardNo.value, entryDate: f.entryDate.value, itemNo: f.itemNo.value, name: f.name.value, origin: f.origin.value, opening: op });
+    const pending = pendingWithdrawal;
+    pendingWithdrawal = null;
     cardDialog.close();
     toast(t('savedCard', { c: card.cardNo }));
+    if (pending) saveWithdrawal(pending, card);
   });
 
   /* ---------- Physical count dialog ---------- */
@@ -461,11 +467,31 @@
   const wForm = $('#wForm');
   wForm.date.value = Store.today();
 
+  const FABRIC = ['itemNo', 'name', 'origin'];
+  let lastAuto = { itemNo: '', name: '', origin: '' };
+  let pendingWithdrawal = null;
+
+  // Fill fabric boxes from the chosen card, but never overwrite what the user typed.
+  function autofillFromCard() {
+    const card = Store.findCardByNo(wForm.cardNo.value);
+    FABRIC.forEach((k) => {
+      const input = wForm[k];
+      const untouched = input.value === '' || input.value === lastAuto[k];
+      const next = card ? card[k] || '' : '';
+      if (untouched) input.value = next;
+      lastAuto[k] = next;
+    });
+  }
+
+  function fillFromItem(form) {
+    const g = data().items.get(Store.norm(form.itemNo.value));
+    if (!g) return;
+    if (!form.name.value) form.name.value = g.name;
+    if (!form.origin.value && g.origins.size) form.origin.value = [...g.origins][0];
+  }
+
   function updateWithdrawalPreview() {
     const card = Store.findCardByNo(wForm.cardNo.value);
-    $('#wItemNo').value = card ? card.itemNo : '';
-    $('#wName').value = card ? card.name : '';
-    $('#wOrigin').value = card ? card.origin : '';
     const box = $('#wAvail');
     if (!card) { box.innerHTML = ''; return; }
     const r = data().rowByCardId.get(card.id);
@@ -475,25 +501,36 @@
     box.innerHTML = `<span>${t('availableInCard')}: <strong class="ltr-num ${valueClass(r.status)}">${fmt(r.final)}</strong></span>
       ${qty ? `<span>${t('afterWithdrawal')}: <strong class="ltr-num ${cls}">${fmt(after)}</strong></span>` : ''}`;
   }
-  wForm.cardNo.addEventListener('input', () => { setError(wForm.cardNo, ''); updateWithdrawalPreview(); });
+  wForm.cardNo.addEventListener('input', () => { setError(wForm.cardNo, ''); autofillFromCard(); updateWithdrawalPreview(); });
+  wForm.itemNo.addEventListener('change', () => fillFromItem(wForm));
   wForm.qty.addEventListener('input', () => { setError(wForm.qty, ''); updateWithdrawalPreview(); });
+
+  async function saveWithdrawal(entry, card) {
+    const r = data().rowByCardId.get(card.id);
+    const after = Math.round((r.final - entry.qty) * 100) / 100;
+    if (after < 0 && !(await ask(t('wouldGoNegative', { v: fmt(after) }), { okLabel: t('addWithdrawal') }))) return;
+    const w = Store.addWithdrawal({ ...entry, cardId: card.id });
+    toast(t('savedWithdrawal', { id: w.id, v: fmt(data().runningAfter.get(w.id)) }), { undo: () => Store.deleteWithdrawal(w.id) });
+    ['cardNo', 'qty', 'notes', ...FABRIC].forEach((k) => { wForm[k].value = ''; });
+    lastAuto = { itemNo: '', name: '', origin: '' };
+    updateWithdrawalPreview();
+    wForm.cardNo.focus();
+  }
 
   wForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const card = Store.findCardByNo(wForm.cardNo.value);
     const qty = Store.num(wForm.qty.value);
-    let ok = setError(wForm.cardNo, !wForm.cardNo.value.trim() ? t('required') : !card ? t('unknownCard') : '');
+    let ok = setError(wForm.cardNo, wForm.cardNo.value.trim() ? '' : t('required'));
     ok = setError(wForm.qty, qty === null ? t('required') : qty <= 0 ? t('positive') : '') && ok;
     if (!wForm.date.value) wForm.date.value = Store.today();
     if (!ok) { $('[aria-invalid="true"]', wForm).focus(); return; }
-    const r = data().rowByCardId.get(card.id);
-    const after = Math.round((r.final - qty) * 100) / 100;
-    if (after < 0 && !(await ask(t('wouldGoNegative', { v: fmt(after) }), { okLabel: t('addWithdrawal') }))) return;
-    const w = Store.addWithdrawal({ date: wForm.date.value, cardId: card.id, qty, notes: wForm.notes.value });
-    toast(t('savedWithdrawal', { id: w.id, v: fmt(data().runningAfter.get(w.id)) }), { undo: () => Store.deleteWithdrawal(w.id) });
-    wForm.cardNo.value = ''; wForm.qty.value = ''; wForm.notes.value = '';
-    updateWithdrawalPreview();
-    wForm.cardNo.focus();
+    const entry = { date: wForm.date.value, qty, notes: wForm.notes.value };
+    FABRIC.forEach((k) => { entry[k] = wForm[k].value; });
+    const card = Store.findCardByNo(wForm.cardNo.value);
+    if (card) return saveWithdrawal(entry, card);
+    // Unregistered card: register it (pre-filled with what was typed), then save the withdrawal.
+    pendingWithdrawal = entry;
+    openCardDialog(null, { cardNo: wForm.cardNo.value.trim(), itemNo: entry.itemNo, name: entry.name, origin: entry.origin }, t('registerCardFirst', { c: wForm.cardNo.value.trim() }));
   });
 
   /* ---------- Withdrawal edit dialog ---------- */
@@ -506,9 +543,11 @@
     $('#wDialogTitle').textContent = `${t('editWithdrawal')} · ${w.id}`;
     wEdit.id.value = w.id; wEdit.date.value = w.date; wEdit.cardNo.value = c ? c.cardNo : '';
     wEdit.qty.value = w.qty; wEdit.notes.value = w.notes;
+    FABRIC.forEach((k) => { wEdit[k].value = w[k] ?? (c ? c[k] : ''); });
     wDialog.showModal();
     wEdit.qty.focus();
   }
+  wEdit.itemNo.addEventListener('change', () => fillFromItem(wEdit));
   wEdit.addEventListener('submit', (e) => {
     e.preventDefault();
     const card = Store.findCardByNo(wEdit.cardNo.value);
@@ -516,7 +555,7 @@
     let ok = setError(wEdit.cardNo, !card ? t('unknownCard') : '');
     ok = setError(wEdit.qty, qty === null || qty <= 0 ? t('positive') : '') && ok;
     if (!ok) return;
-    const w = Store.updateWithdrawal(wEdit.id.value, { date: wEdit.date.value || Store.today(), cardId: card.id, qty, notes: wEdit.notes.value });
+    const w = Store.updateWithdrawal(wEdit.id.value, { date: wEdit.date.value || Store.today(), cardId: card.id, qty, notes: wEdit.notes.value, itemNo: wEdit.itemNo.value, name: wEdit.name.value, origin: wEdit.origin.value });
     wDialog.close();
     toast(t('updatedWithdrawal', { id: w.id }));
   });
@@ -556,7 +595,7 @@
     if (ds.withdraw) {
       const c = Store.state.cards.find((x) => x.id === ds.withdraw);
       showTab('withdrawals');
-      wForm.cardNo.value = c.cardNo; updateWithdrawalPreview(); wForm.qty.focus();
+      wForm.cardNo.value = c.cardNo; autofillFromCard(); updateWithdrawalPreview(); wForm.qty.focus();
       return;
     }
     if (ds.count) return openCountDialog(ds.count);
@@ -641,9 +680,9 @@
     { key: 'date', label: () => t('wDate'), get: (x) => x.w.date },
     { key: null, label: () => t('wId'), get: (x) => x.w.id },
     { key: 'cardNo', label: () => t('cardNo'), get: (x) => x.c.cardNo },
-    { key: null, label: () => t('itemNo'), get: (x) => x.c.itemNo },
-    { key: null, label: () => t('fabricName'), get: (x) => x.c.name },
-    { key: null, label: () => t('origin'), get: (x) => x.c.origin },
+    { key: 'itemNo', label: () => t('itemNo'), get: (x) => x.fab.itemNo },
+    { key: 'name', label: () => t('fabricName'), get: (x) => x.fab.name },
+    { key: 'origin', label: () => t('origin'), get: (x) => x.fab.origin },
     { key: 'qty', label: () => t('wQty'), get: (x) => x.w.qty },
     { key: 'notes', label: () => t('wNotes'), get: (x) => x.w.notes },
   ];
@@ -730,7 +769,7 @@
         const card = Store.findCardByNo(o.cardNo);
         const qty = Store.num(o.qty);
         if (!card || !qty || qty <= 0) { skipped++; return; }
-        Store.addWithdrawal({ date: normDate(o.date) || Store.today(), cardId: card.id, qty, notes: o.notes });
+        Store.addWithdrawal({ date: normDate(o.date) || Store.today(), cardId: card.id, qty, notes: o.notes, itemNo: o.itemNo, name: o.name, origin: o.origin });
       }
       n++;
     });

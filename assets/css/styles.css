@@ -649,3 +649,4 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   .table--items td:nth-child(3), .table--items td:nth-child(5), .table--items td:nth-child(6) { display: none; }
 }
 .table--inv td:nth-child(12) { white-space: nowrap; }
+.form-note { grid-column: 1 / -1; color: var(--gold-light); }

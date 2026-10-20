@@ -150,16 +150,16 @@
             <p class="field__msg" id="wCardMsg"></p>
           </div>
           <div class="field">
-            <label for="wItemNo"><span data-i18n="itemNo"></span> <small data-i18n="autoFilled"></small></label>
-            <input class="input" id="wItemNo" readonly tabindex="-1">
+            <label for="wItemNo"><span data-i18n="itemNo"></span> <small data-i18n="autoFillHint"></small></label>
+            <input class="input" id="wItemNo" name="itemNo" list="itemList" autocomplete="off">
           </div>
           <div class="field">
-            <label for="wName"><span data-i18n="fabricName"></span> <small data-i18n="autoFilled"></small></label>
-            <input class="input" id="wName" readonly tabindex="-1">
+            <label for="wName"><span data-i18n="fabricName"></span> <small data-i18n="autoFillHint"></small></label>
+            <input class="input" id="wName" name="name" autocomplete="off">
           </div>
           <div class="field">
-            <label for="wOrigin"><span data-i18n="origin"></span> <small data-i18n="autoFilled"></small></label>
-            <input class="input" id="wOrigin" readonly tabindex="-1">
+            <label for="wOrigin"><span data-i18n="origin"></span> <small data-i18n="autoFillHint"></small></label>
+            <input class="input" id="wOrigin" name="origin" list="originList" autocomplete="off">
           </div>
           <div class="field">
             <label for="wQty" data-i18n="wQty"></label>
@@ -343,6 +343,7 @@
         <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
       </header>
       <div class="dialog__body form-grid">
+        <p class="count-ref form-note" id="cardNote" role="status" hidden></p>
         <input type="hidden" name="id">
         <div class="field">
           <label for="cCardNo" data-i18n="cardNo"></label>
@@ -426,6 +427,18 @@
           <label for="eCard" data-i18n="cardNo"></label>
           <input class="input" id="eCard" name="cardNo" list="cardList" required autocomplete="off" aria-describedby="eCardMsg">
           <p class="field__msg" id="eCardMsg"></p>
+        </div>
+        <div class="field">
+          <label for="eItemNo" data-i18n="itemNo"></label>
+          <input class="input" id="eItemNo" name="itemNo" list="itemList" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="eName" data-i18n="fabricName"></label>
+          <input class="input" id="eName" name="name" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="eOrigin" data-i18n="origin"></label>
+          <input class="input" id="eOrigin" name="origin" list="originList" autocomplete="off">
         </div>
         <div class="field">
           <label for="eQty" data-i18n="wQty"></label>

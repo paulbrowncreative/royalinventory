@@ -230,6 +230,13 @@
     commit();
   }
 
+  // Fabric details are typed on each withdrawal; blanks fall back to the card's own details.
+  function fabricFields(data) {
+    const card = state.cards.find((c) => c.id === data.cardId) || {};
+    const pick = (k) => String(data[k] ?? '').trim() || card[k] || '';
+    return { itemNo: pick('itemNo'), name: pick('name'), origin: pick('origin') };
+  }
+
   function addWithdrawal(data) {
     state.seq.withdrawal += 1;
     const w = {
@@ -239,6 +246,7 @@
       cardId: data.cardId,
       qty: num(data.qty),
       notes: String(data.notes || '').trim(),
+      ...fabricFields(data),
     };
     state.withdrawals.push(w);
     commit();
@@ -247,7 +255,7 @@
 
   function updateWithdrawal(id, data) {
     const w = state.withdrawals.find((x) => x.id === id);
-    Object.assign(w, { date: data.date, cardId: data.cardId, qty: num(data.qty), notes: String(data.notes || '').trim() });
+    Object.assign(w, { date: data.date, cardId: data.cardId, qty: num(data.qty), notes: String(data.notes || '').trim(), ...fabricFields(data) });
     commit();
     return w;
   }
