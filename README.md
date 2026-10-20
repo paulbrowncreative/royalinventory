@@ -24,7 +24,11 @@ Plain HTML/CSS/JS with no build step and no dependencies.
 - Alerts: negative, out (0), low (≤ threshold, default 5 m), variance
 
 ## Google sign-in (single sign-on)
-`netlify/edge-functions/auth.js` runs on Netlify before every request: nobody can load the app, its files, or `/auth/me`
+> **Currently switched off for previewing.** The gate lives in `sso/auth.js`, outside the folder Netlify deploys
+> functions from, so the site is open to anyone with the link. To turn it on, set the environment variables below and
+> move it back: `git mv sso/auth.js netlify/edge-functions/auth.js`, then commit and deploy.
+
+When enabled, `netlify/edge-functions/auth.js` runs on Netlify before every request: nobody can load the app, its files, or `/auth/me`
 without signing in with an allow-listed Google account. Sessions last 7 days in a signed, HttpOnly cookie, and the
 allow-list is checked on every request, so removing an email revokes access immediately. Locally (no Netlify) the gate is not active.
 
@@ -62,7 +66,7 @@ Deleted cards/withdrawals go to an archive and can be restored.
 ## Files
 ```
 index.html            markup, dialogs, icon sprite
-netlify/edge-functions/auth.js  Google sign-in gate (runs on Netlify)
+sso/auth.js           Google sign-in gate (disabled; see above to enable)
 assets/css/styles.css design tokens + components (black / gold / ivory)
 assets/js/i18n.js     Arabic & English strings
 assets/js/config.js   site settings (Dropbox App key)
