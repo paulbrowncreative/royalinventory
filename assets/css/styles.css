@@ -677,3 +677,9 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 .save-status[data-state="sync-error"], .save-status[data-state="auth"] { color: var(--neg-dk); }
 .save-status[data-state="local"] .dot { background: var(--gold); box-shadow: 0 0 0 3px rgba(212, 175, 98, 0.2); }
 @media (max-width: 1100px) { .tab { padding-inline: var(--s-3); font-size: var(--fs-sm); } }
+
+/* Signed-in account */
+.account { display: inline-flex; align-items: center; gap: var(--s-2); }
+.account__avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--gold-grad); color: var(--black); font-weight: 700; font-size: var(--fs-sm); }
+.account__name { font-size: var(--fs-sm); color: var(--text-2); max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) { .account__name { display: none; } .masthead__tools { flex-wrap: wrap; } }

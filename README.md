@@ -23,6 +23,28 @@ Plain HTML/CSS/JS with no build step and no dependencies.
 - Final available = physical count − withdrawals after the count date (or the calculated balance when there is no count)
 - Alerts: negative, out (0), low (≤ threshold, default 5 m), variance
 
+## Google sign-in (single sign-on)
+`netlify/edge-functions/auth.js` runs on Netlify before every request: nobody can load the app, its files, or `/auth/me`
+without signing in with an allow-listed Google account. Sessions last 7 days in a signed, HttpOnly cookie, and the
+allow-list is checked on every request, so removing an email revokes access immediately. Locally (no Netlify) the gate is not active.
+
+### One-time Google setup (Google Cloud Console)
+1. https://console.cloud.google.com → create a project (e.g. "Royal Inventory").
+2. **APIs & Services → OAuth consent screen** (Google Auth Platform): app name, support email.
+   Audience **Internal** if all staff use your Google Workspace domain; otherwise **External**, then **Publish app**
+   (only the basic `openid email profile` scopes are used, so no Google verification is required).
+3. **Credentials → Create credentials → OAuth client ID → Web application**.
+   - Authorised redirect URI: `https://<your-site>.netlify.app/auth/callback` (add your custom domain's `/auth/callback` too).
+4. In **Netlify → Site configuration → Environment variables** add:
+   | Variable | Value |
+   |---|---|
+   | `GOOGLE_CLIENT_ID` | the client ID |
+   | `GOOGLE_CLIENT_SECRET` | the client secret (keep private — only in Netlify) |
+   | `SESSION_SECRET` | 32+ random characters, e.g. from `openssl rand -base64 48` |
+   | `ALLOWED_EMAILS` | comma-separated staff Gmail/Google addresses |
+   | `ALLOWED_DOMAINS` | optional: your Google Workspace domain, admits every account in it |
+5. Redeploy. Until the variables are set, the site shows a "sign-in not configured" page (it fails closed).
+
 ## Data & Dropbox
 Every change is saved instantly in the browser (IndexedDB) and, once Dropbox is connected, uploaded to
 `Dropbox/Apps/<your app>/royal-inventory.json`. A full copy is also written to `history/YYYY-MM-DD.json` each day.
@@ -40,6 +62,7 @@ Deleted cards/withdrawals go to an archive and can be restored.
 ## Files
 ```
 index.html            markup, dialogs, icon sprite
+netlify/edge-functions/auth.js  Google sign-in gate (runs on Netlify)
 assets/css/styles.css design tokens + components (black / gold / ivory)
 assets/js/i18n.js     Arabic & English strings
 assets/js/config.js   site settings (Dropbox App key)

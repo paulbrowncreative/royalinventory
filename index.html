@@ -31,6 +31,11 @@
       </div>
       <div class="masthead__tools">
         <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="dot"></span><span class="save-status__text" data-i18n="saved">محفوظ</span></span>
+        <div class="account" id="account" hidden>
+          <span class="account__avatar" aria-hidden="true"></span>
+          <span class="account__name"></span>
+          <a class="btn btn--ghost btn--sm" href="/auth/logout"><span data-i18n="signOut">تسجيل الخروج</span></a>
+        </div>
         <button type="button" class="btn btn--ghost btn--sm" id="langToggle" lang="en">
           <svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg>
           <span data-i18n="langSwitch">English</span>

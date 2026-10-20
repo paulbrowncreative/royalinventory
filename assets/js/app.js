@@ -423,6 +423,8 @@
   function renderSettings() {
     $('#setThreshold').value = Store.state.settings.lowThreshold;
     try { $('#setUser').value = localStorage.getItem('royal-user') || ''; } catch (_) {}
+    $('#setUser').readOnly = !!ui.account;
+    $('#setUserHelp').textContent = t(ui.account ? 'userFromGoogle' : 'userNameHelp');
     const box = $('#cloudPanel');
     const m = Store.meta;
     if (Cloud.connected()) {
@@ -995,7 +997,25 @@
 
   $('#year').textContent = new Date().getFullYear();
 
+  // When the site sits behind Google sign-in (Netlify edge function), show who is signed in
+  // and stamp their name on every change. Locally /auth/me does not exist and this is skipped.
+  async function loadAccount() {
+    try {
+      const res = await fetch('/auth/me', { headers: { accept: 'application/json' }, cache: 'no-store' });
+      if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return;
+      ui.account = await res.json();
+    } catch (_) { return; }
+    const name = ui.account.name || ui.account.email;
+    try { localStorage.setItem('royal-user', name); } catch (_) {}
+    const box = $('#account');
+    $('.account__avatar', box).textContent = name.trim().charAt(0).toUpperCase();
+    $('.account__name', box).textContent = name;
+    box.title = ui.account.email;
+    box.hidden = false;
+  }
+
   Store.load().then(async () => {
+    loadAccount();
     let lang = 'ar';
     try { lang = localStorage.getItem('royal-lang') || 'ar'; } catch (_) {}
     I18N.set(lang);
