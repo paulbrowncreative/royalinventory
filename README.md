@@ -5,7 +5,7 @@ Plain HTML/CSS/JS with no build step and no dependencies.
 
 ## Run
 - **Locally:** open `index.html` in Chrome/Edge, or run `python3 -m http.server` and visit http://localhost:8000
-- **Hosted:** enable GitHub Pages (Settings → Pages → deploy from branch, root folder).
+- **Netlify:** Add new site → Import from GitHub → pick this repo and branch. `netlify.toml` sets everything (no build command, publish directory `.`). Or drag the project folder onto https://app.netlify.com/drop.
 
 ## Pages
 | Page | Purpose |
