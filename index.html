@@ -9,7 +9,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#0b0b0c">
   <meta name="color-scheme" content="dark">
-  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/img/brand/favicon-64.png" type="image/png" sizes="64x64">
+  <link rel="apple-touch-icon" href="assets/img/brand/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@500;600;700&display=swap">
@@ -20,11 +21,11 @@
 
   <header class="masthead">
     <div class="masthead__inner container">
-      <div class="brand">
-        <svg class="brand__crown" aria-hidden="true"><use href="#i-crown"/></svg>
-        <span class="brand__name" data-i18n="brandName">رويال</span>
-        <span class="brand__tag" data-i18n="brandTag">نادي الأناقة الملكي</span>
-      </div>
+      <a class="brand" href="#dashboard">
+        <span class="brand__crest logo-mask" aria-hidden="true"></span>
+        <span class="brand__wordmark logo-mask" aria-hidden="true"></span>
+        <span class="visually-hidden"><span data-i18n="brandName">رويال</span> – <span data-i18n="brandTag">نادي الأناقة الملكي</span></span>
+      </a>
       <div class="masthead__title">
         <h1 data-i18n="appTitle">نظام جرد الأقمشة</h1>
         <p data-i18n="appTagline">إدارة دقيقة لمخزون الأقمشة… بسهولة واحترافية</p>
@@ -420,7 +421,7 @@
 
   <footer class="site-footer">
     <div class="container site-footer__inner">
-      <p><svg class="icon" aria-hidden="true"><use href="#i-crown"/></svg> © <span id="year"></span> <span data-i18n="brandName"></span> — <span data-i18n="brandTag"></span> · <span data-i18n="rights"></span></p>
+      <p><span class="footer-crest logo-mask" aria-hidden="true"></span> © <span id="year"></span> <span data-i18n="brandName"></span> — <span data-i18n="brandTag"></span> · <span data-i18n="rights"></span></p>
       <p class="site-footer__meta">
         <span><span data-i18n="totalMovements"></span>: <strong id="footMovements" class="ltr-num">0</strong></span>
         <span><span data-i18n="lastUpdate"></span>: <strong id="footUpdated" class="ltr-num">—</strong></span>

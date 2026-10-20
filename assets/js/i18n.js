@@ -266,8 +266,8 @@
     },
 
     en: {
-      brandName: 'ROYAL',
-      brandTag: 'The Royal Elegance Club',
+      brandName: 'Royal',
+      brandTag: 'Fashion Club',
       appTitle: 'Fabric Inventory System',
       appTagline: 'Precise fabric stock control — simple and professional',
       langSwitch: 'العربية',

@@ -74,15 +74,16 @@ function page(message = '', status = 200, showButton = true, tone = 'error') {
   const html = `<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>تسجيل الدخول | رويال – نظام جرد الأقمشة</title><meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/brand/favicon-64.png" type="image/png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=IBM+Plex+Sans+Arabic:wght@400;600&family=Reem+Kufi:wght@600;700&display=swap">
 <style>
 :root{--gold:#d4af62;--gold-grad:linear-gradient(135deg,#f3dc9f 0%,#d4af62 38%,#a87e36 72%,#e2c27c 100%);--text:#f4efe4;--muted:#a79f8f;--line:rgba(212,175,98,.3)}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:radial-gradient(900px 500px at 80% -10%,rgba(212,175,98,.14),transparent 60%),repeating-linear-gradient(115deg,transparent 0 46px,rgba(240,215,154,.03) 52px,transparent 64px 110px),#0b0b0d;color:var(--text);font:400 1rem/1.6 "IBM Plex Sans Arabic","Segoe UI",Tahoma,sans-serif}
 main{width:min(440px,100%);text-align:center;padding:40px 28px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#1c1a18,#121214);box-shadow:0 30px 80px -30px #000}
-.crown{width:30px;height:30px;margin:0 auto 4px;display:block;stroke:var(--gold);fill:none;stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round}
-.brand{font:700 3rem/1.1 "Reem Kufi",serif;background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent;margin:0}
-.tag{color:#f0d79a;font-size:.8rem;margin:2px 0 24px}
+.mark{display:block;margin:0 auto;background:var(--gold-grad);-webkit-mask:var(--logo) center/contain no-repeat;mask:var(--logo) center/contain no-repeat}
+.crest{--logo:url(/assets/img/brand/crest.png);width:84px;aspect-ratio:360/446;margin-bottom:14px}
+.wordmark{--logo:url(/assets/img/brand/wordmark-ar.png);width:190px;aspect-ratio:640/321;margin-bottom:22px}
+.rule{width:56px;height:1px;background:var(--line);margin:0 auto 20px}
 h1{font:600 1.35rem/1.4 "Reem Kufi",serif;margin:0 0 6px}
 .en{font-family:"Cormorant Garamond",Georgia,serif;color:var(--muted);font-size:1.05rem;margin:0 0 24px}
 p.msg{margin:0 0 20px;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,138,128,.4);color:#ffb4ab;font-size:.9rem}p.msg--info{border-color:var(--line);color:#f0d79a}
@@ -91,8 +92,9 @@ a.btn:hover{box-shadow:0 0 0 3px rgba(212,175,98,.55)}a.btn:focus-visible{outlin
 a.btn svg{width:20px;height:20px}
 small{display:block;margin-top:22px;color:var(--muted);font-size:.78rem}
 </style></head><body><main>
-<svg class="crown" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18M4 15 3 7l5 4 4-6 4 6 5-4-1 8H4Z"/></svg>
-<p class="brand">رويال</p><p class="tag">نادي الأناقة الملكي</p>
+<span class="mark crest" aria-hidden="true"></span>
+<span class="mark wordmark" role="img" aria-label="رويال – نادي الأناقة الملكي · Royal Fashion Club"></span>
+<div class="rule" aria-hidden="true"></div>
 <h1>نظام جرد الأقمشة</h1><p class="en" lang="en">Fabric Inventory System</p>
 ${message ? `<p class="msg msg--${tone}" role="${tone === 'error' ? 'alert' : 'status'}">${message}</p>` : ''}
 ${showButton ? `<a class="btn" href="/auth/login"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.9-6.2C1 16.4 0 20.1 0 24s1 7.6 2.7 10.8l7.8-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg><span>تسجيل الدخول بحساب Google</span></a>` : ''}
@@ -178,5 +180,6 @@ export default async function auth(request, context) {
 
 export const config = {
   path: '/*',
-  excludedPath: ['/assets/img/favicon.svg', '/robots.txt'],
+  // Only the public brand marks (shown on the sign-in page) bypass the gate.
+  excludedPath: ['/assets/img/brand/*', '/robots.txt'],
 };

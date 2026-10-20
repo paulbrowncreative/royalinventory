@@ -121,26 +121,26 @@ html[dir="rtl"] .masthead::before { transform: scaleX(-1); }
   gap: var(--s-5);
   padding-block: var(--s-5) var(--s-4);
 }
+/* Brand marks: the supplied logos are used as alpha masks so they take the gold gradient. */
+.logo-mask {
+  display: block;
+  background: var(--gold-grad);
+  -webkit-mask: var(--logo) center / contain no-repeat;
+  mask: var(--logo) center / contain no-repeat;
+}
 .brand {
-  display: grid;
-  justify-items: center;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
   padding-inline-end: var(--s-5);
   border-inline-end: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  text-decoration: none;
 }
-.brand__crown { width: 26px; height: 26px; stroke: var(--gold); stroke-width: 1.3; fill: none; margin-bottom: 2px; }
-.brand__name {
-  font-family: var(--font-display-ar);
-  font-weight: 700;
-  font-size: clamp(2rem, 1.4rem + 2.4vw, 3.1rem);
-  background: var(--gold-grad);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  letter-spacing: 0.02em;
-  padding-block: 2px 4px;
-}
-html[lang="en"] .brand__name { font-family: var(--font-display-en); letter-spacing: 0.18em; font-weight: 600; }
-.brand__tag { font-size: var(--fs-xs); color: var(--gold-light); letter-spacing: 0.04em; opacity: 0.85; }
-html[lang="en"] .brand__tag { letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.625rem; }
+.brand__crest { --logo: url("../img/brand/crest.png"); width: 54px; aspect-ratio: 360 / 446; }
+.brand__wordmark { --logo: url("../img/brand/wordmark-ar.png"); height: 64px; aspect-ratio: 640 / 321; }
+html[lang="en"] .brand__wordmark { --logo: url("../img/brand/wordmark-en.png"); aspect-ratio: 640 / 285; }
+.footer-crest { --logo: url("../img/brand/crest.png"); width: 16px; aspect-ratio: 360 / 446; }
 
 .masthead__title h1 {
   font-family: var(--font-display-ar);
@@ -584,6 +584,8 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   :root { --fs-base: 1rem; }
   .masthead__inner { gap: var(--s-4); padding-block: var(--s-4) var(--s-3); }
   .brand { padding-inline-end: var(--s-4); }
+  .brand__crest { width: 40px; }
+  .brand__wordmark { height: 48px; }
   .masthead__title p { display: none; }
   .card-panel { padding: var(--s-4); }
   .toolbar { justify-content: stretch; }
@@ -619,7 +621,7 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   .kpi, .kpi__link { padding: var(--s-3); gap: var(--s-2); }
   .kpi__icon { width: 36px; height: 36px; }
   .w-form { grid-template-columns: 1fr; }
-  .brand__tag { display: none; }
+  .brand__crest { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -631,7 +633,8 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   .masthead::before, .tabs, .toolbar, .actions, .pager, .w-form, .site-footer, .toasts, .save-status, #langToggle { display: none !important; }
   .card-panel { border: 0; box-shadow: none; background: none; padding: 0; }
   .masthead { background: none; border: 0; }
-  .brand__name, .masthead__title h1 { color: #000; background: none; }
+  .masthead__title h1 { color: #000; background: none; }
+  .logo-mask { background: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .table thead th { background: #eee; color: #000; }
 }
 
