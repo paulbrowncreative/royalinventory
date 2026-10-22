@@ -23,31 +23,21 @@ Plain HTML/CSS/JS with no build step and no dependencies.
 - Final available = physical count − withdrawals after the count date (or the calculated balance when there is no count)
 - Alerts: negative, out (0), low (≤ threshold, default 5 m), variance
 
-## Google sign-in (single sign-on)
-> **Currently switched off for previewing.** The gate lives in `sso/auth.js`, outside the folder Netlify deploys
-> functions from, so the site is open to anyone with the link. To turn it on, set the environment variables below and
-> move it back: `git mv sso/auth.js netlify/edge-functions/auth.js`, then commit and deploy.
+## Staff sign-in (Netlify Identity)
+`netlify/edge-functions/auth.js` runs on Netlify before every request. Only invited staff can load the app,
+its scripts or `/auth/me`; everyone else sees the branded sign-in page. Free on every Netlify plan, no API keys.
 
-When enabled, `netlify/edge-functions/auth.js` runs on Netlify before every request: nobody can load the app, its files, or `/auth/me`
-without signing in with an allow-listed Google account. Sessions last 7 days in a signed, HttpOnly cookie, and the
-allow-list is checked on every request, so removing an email revokes access immediately. Locally (no Netlify) the gate is not active.
+**Setup (Netlify → your site → Identity):**
+1. **Enable Identity**.
+2. **Settings and usage → Registration → Registration preferences → Invite only** → Save.
+3. **Invite users** → enter staff emails. Each person gets an email, clicks the link, sets a password and is signed in.
 
-### One-time Google setup (Google Cloud Console)
-1. https://console.cloud.google.com → create a project (e.g. "Royal Inventory").
-2. **APIs & Services → OAuth consent screen** (Google Auth Platform): app name, support email.
-   Audience **Internal** if all staff use your Google Workspace domain; otherwise **External**, then **Publish app**
-   (only the basic `openid email profile` scopes are used, so no Google verification is required).
-3. **Credentials → Create credentials → OAuth client ID → Web application**.
-   - Authorised redirect URI: `https://<your-site>.netlify.app/auth/callback` (add your custom domain's `/auth/callback` too).
-4. In **Netlify → Site configuration → Environment variables** add:
-   | Variable | Value |
-   |---|---|
-   | `GOOGLE_CLIENT_ID` | the client ID |
-   | `GOOGLE_CLIENT_SECRET` | the client secret (keep private — only in Netlify) |
-   | `SESSION_SECRET` | 32+ random characters, e.g. from `openssl rand -base64 48` |
-   | `ALLOWED_EMAILS` | comma-separated staff Gmail/Google addresses |
-   | `ALLOWED_DOMAINS` | optional: your Google Workspace domain, admits every account in it |
-5. Redeploy. Until the variables are set, the site shows a "sign-in not configured" page (it fails closed).
+Managing access: invite to add, **Delete user** to remove (locked out within about a minute).
+Staff can reset their own password with "Forgot password?" on the sign-in page.
+The gate fails closed: if Identity is off, or registration is left *Open*, nobody can sign in and the page says why.
+Sessions last 14 days of inactivity. Locally (without Netlify) the gate is not active.
+
+An alternative Google sign-in gate (requires a Google Cloud OAuth client) is kept in `sso/google-auth.js`.
 
 ## Data & Dropbox
 Every change is saved instantly in the browser (IndexedDB) and, once Dropbox is connected, uploaded to
@@ -66,7 +56,8 @@ Deleted cards/withdrawals go to an archive and can be restored.
 ## Files
 ```
 index.html            markup, dialogs, icon sprite
-sso/auth.js           Google sign-in gate (disabled; see above to enable)
+netlify/edge-functions/auth.js  staff sign-in gate (Netlify Identity)
+sso/google-auth.js    alternative Google sign-in gate (not deployed)
 assets/css/styles.css design tokens + components (black / gold / ivory)
 assets/js/i18n.js     Arabic & English strings
 assets/js/config.js   site settings (Dropbox App key)
