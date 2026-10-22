@@ -109,7 +109,6 @@
     $('#itemList').innerHTML = [...d.items.values()].map((g) => `<option value="${esc(g.itemNo)}">${esc(g.name)}</option>`).join('');
     const originOpts = (sel, val) => { sel.innerHTML = `<option value="">${t('allOrigins')}</option>` + origins.map((o) => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join(''); };
     originOpts($('#invOrigin'), ui.inv.origin);
-    originOpts($('#logOrigin'), ui.log.origin);
     $('#invStatus').innerHTML = [['', 'allStatuses'], ['negative', 'stNegative'], ['out', 'stOut'], ['low', 'stLow'], ['variance', 'stVariance'], ['alerts-all', 'attention'], ['ok', 'stOk']]
       .map(([v, k]) => `<option value="${v}"${v === ui.inv.status ? ' selected' : ''}>${t(k)}</option>`).join('');
     $('#emptyState').hidden = s.cards.length > 0;
@@ -268,7 +267,6 @@
       return { w, c, fab };
     }).filter(({ w, c, fab }) => {
       if (!c) return false;
-      if (f.origin && fab.origin !== f.origin) return false;
       if (f.from && w.date < f.from) return false;
       if (f.to && w.date > f.to) return false;
       if (q && ![w.id, c.cardNo, fab.itemNo, fab.name, w.notes].some((v) => Store.norm(v).includes(q))) return false;
@@ -282,7 +280,7 @@
     const { slice, pager } = paginate(rows, ui.log, 'log');
     $('#logBody').innerHTML = slice.length ? slice.map(({ w, c, fab }) => {
       const after = d.runningAfter.get(w.uid);
-      const g = d.items.get(Store.norm(fab.itemNo) || '—');
+      const itemAfter = d.itemAfter.get(w.uid);
       const cls = after < 0 ? 'v-neg' : after <= d.threshold ? 'v-warn' : 'v-pos';
       return `<tr>
         <th scope="row" data-label="${t('wId')}" class="ltr-num muted-cell">${esc(w.id)}</th>
@@ -290,16 +288,15 @@
         <td data-label="${t('cardNo')}" class="ltr-num"><button type="button" class="link-cell" data-lookup="${esc(c.cardNo)}">${esc(c.cardNo)}</button></td>
         <td data-label="${t('itemNo')}" class="ltr-num">${esc(fab.itemNo)}</td>
         <td data-label="${t('fabricName')}">${esc(fab.name)}</td>
-        <td data-label="${t('origin')}">${esc(fab.origin || '—')}</td>
         <td data-label="${t('wQty')}" class="num"><strong>${fmt(w.qty)}</strong></td>
         <td data-label="${t('wCardAfter')}" class="num"><strong class="${cls}">${fmt(after)}</strong></td>
-        <td data-label="${t('wItemTotal')}" class="num"><span class="${g && g.final < 0 ? 'v-neg' : 'v-pos'}">${fmt(g ? g.final : null)}</span></td>
+        <td data-label="${t('wItemTotal')}" class="num"><span class="${itemAfter < 0 ? 'v-neg' : itemAfter <= d.threshold ? 'v-warn' : 'v-pos'}">${fmt(itemAfter)}</span></td>
         <td data-label="${t('wNotes')}">${esc(w.notes || '—')}</td>
         <td class="actions">
           <button type="button" class="icon-btn" data-edit-w="${esc(w.uid)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
           <button type="button" class="icon-btn icon-btn--danger" data-del-w="${esc(w.uid)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
         </td></tr>`;
-    }).join('') : `<tr class="row-empty"><td colspan="11">${Store.state.withdrawals.length ? t('noResults') : t('noWithdrawalsYet')}</td></tr>`;
+    }).join('') : `<tr class="row-empty"><td colspan="10">${Store.state.withdrawals.length ? t('noResults') : t('noWithdrawalsYet')}</td></tr>`;
     $('#logPager').innerHTML = pager;
   }
 
@@ -635,7 +632,7 @@
   const wForm = $('#wForm');
   wForm.date.value = Store.today();
 
-  const FABRIC = ['itemNo', 'name', 'origin'];
+  const FABRIC = ['itemNo', 'name'];
   let lastAuto = { itemNo: '', name: '', origin: '' };
   let pendingWithdrawal = null;
 
@@ -655,19 +652,23 @@
     const g = data().items.get(Store.norm(form.itemNo.value));
     if (!g) return;
     if (!form.name.value) form.name.value = g.name;
-    if (!form.origin.value && g.origins.size) form.origin.value = [...g.origins][0];
+    if (form.origin && !form.origin.value && g.origins.size) form.origin.value = [...g.origins][0];
   }
 
   function updateWithdrawalPreview() {
     const card = Store.findCardByNo(wForm.cardNo.value);
     const box = $('#wAvail');
     if (!card) { box.innerHTML = ''; return; }
-    const r = data().rowByCardId.get(card.id);
+    const d = data();
+    const r = d.rowByCardId.get(card.id);
+    const g = d.items.get(Store.norm(card.itemNo) || '—');
     const qty = Store.num(wForm.qty.value) || 0;
-    const after = Math.round((r.final - qty) * 100) / 100;
-    const cls = after < 0 ? 'v-neg' : after <= data().threshold ? 'v-warn' : 'v-pos';
-    box.innerHTML = `<span>${t('availableInCard')}: <strong class="ltr-num ${valueClass(r.status)}">${fmt(r.final)}</strong></span>
-      ${qty ? `<span>${t('afterWithdrawal')}: <strong class="ltr-num ${cls}">${fmt(after)}</strong></span>` : ''}`;
+    const cls = (v) => (v < 0 ? 'v-neg' : v <= d.threshold ? 'v-warn' : 'v-pos');
+    const fig = (label, now) => {
+      const after = Math.round((now - qty) * 100) / 100;
+      return `<span class="avail__fig"><span>${label}</span><strong class="ltr-num ${cls(now)}">${fmt(now)}</strong>${qty ? `<span class="avail__arrow" aria-hidden="true">→</span><strong class="ltr-num ${cls(after)}">${fmt(after)}</strong><small>${t('afterWithdrawal')}</small>` : ''}</span>`;
+    };
+    box.innerHTML = fig(t('wCardAfter'), r.final) + fig(t('wItemTotal'), g ? g.final : r.final);
   }
   wForm.cardNo.addEventListener('input', () => { setError(wForm.cardNo, ''); autofillFromCard(); updateWithdrawalPreview(); });
   wForm.itemNo.addEventListener('change', () => fillFromItem(wForm));
@@ -723,7 +724,7 @@
     let ok = setError(wEdit.cardNo, !card ? t('unknownCard') : '');
     ok = setError(wEdit.qty, qty === null || qty <= 0 ? t('positive') : '') && ok;
     if (!ok) return;
-    const w = Store.updateWithdrawal(wEdit.id.value, { date: wEdit.date.value || Store.today(), cardId: card.id, qty, notes: wEdit.notes.value, itemNo: wEdit.itemNo.value, name: wEdit.name.value, origin: wEdit.origin.value });
+    const w = Store.updateWithdrawal(wEdit.id.value, { date: wEdit.date.value || Store.today(), cardId: card.id, qty, notes: wEdit.notes.value, itemNo: wEdit.itemNo.value, name: wEdit.name.value });
     wDialog.close();
     toast(t('updatedWithdrawal', { id: w.id }));
   });
@@ -817,7 +818,6 @@
   $('#invOrigin').addEventListener('change', (e) => { ui.inv.origin = e.target.value; ui.inv.page = 1; render(); });
   $('#invStatus').addEventListener('change', (e) => { ui.inv.status = e.target.value; ui.inv.page = 1; render(); });
   $('#logSearch').addEventListener('input', debounce((e) => { ui.log.q = e.target.value; ui.log.page = 1; render(); }));
-  $('#logOrigin').addEventListener('change', (e) => { ui.log.origin = e.target.value; ui.log.page = 1; render(); });
   $('#logFrom').addEventListener('change', (e) => { ui.log.from = e.target.value; ui.log.page = 1; render(); });
   $('#logTo').addEventListener('change', (e) => { ui.log.to = e.target.value; ui.log.page = 1; render(); });
   $('#itemSearch').addEventListener('input', debounce((e) => { ui.items.q = e.target.value; ui.items.page = 1; render(); }));
@@ -862,8 +862,9 @@
     { key: 'cardNo', label: () => t('cardNo'), get: (x) => x.c.cardNo },
     { key: 'itemNo', label: () => t('itemNo'), get: (x) => x.fab.itemNo },
     { key: 'name', label: () => t('fabricName'), get: (x) => x.fab.name },
-    { key: 'origin', label: () => t('origin'), get: (x) => x.fab.origin },
     { key: 'qty', label: () => t('wQty'), get: (x) => x.w.qty },
+    { key: null, label: () => t('wCardAfter'), get: (x) => x.after },
+    { key: null, label: () => t('wItemTotal'), get: (x) => x.itemAfter },
     { key: 'notes', label: () => t('wNotes'), get: (x) => x.w.notes },
   ];
 
@@ -883,7 +884,8 @@
     download(`inventory-${Store.today()}.csv`, toCsv([CARD_COLS.map((c) => c.label()), ...rows.map((r) => CARD_COLS.map((c) => c.get(r)))], true));
   }
   function exportWithdrawals() {
-    const rows = filteredLog(data());
+    const d = data();
+    const rows = filteredLog(d).map((x) => ({ ...x, after: d.runningAfter.get(x.w.uid), itemAfter: d.itemAfter.get(x.w.uid) }));
     download(`withdrawals-${Store.today()}.csv`, toCsv([W_COLS.map((c) => c.label()), ...rows.map((x) => W_COLS.map((c) => c.get(x)))], true));
   }
 

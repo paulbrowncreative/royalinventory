@@ -167,10 +167,6 @@
             <input class="input" id="wName" name="name" autocomplete="off">
           </div>
           <div class="field">
-            <label for="wOrigin"><span data-i18n="origin"></span> <small data-i18n="autoFillHint"></small></label>
-            <input class="input" id="wOrigin" name="origin" list="originList" autocomplete="off">
-          </div>
-          <div class="field">
             <label for="wQty" data-i18n="wQty"></label>
             <input class="input input--num" type="number" id="wQty" name="qty" min="0.01" step="0.01" inputmode="decimal" required placeholder="0.00" aria-describedby="wQtyMsg">
             <p class="field__msg" id="wQtyMsg"></p>
@@ -199,8 +195,6 @@
               <label class="visually-hidden" for="logSearch" data-i18n="search"></label>
               <input class="input" id="logSearch" type="search" autocomplete="off" data-i18n-ph="searchLogPh">
             </div>
-            <label class="visually-hidden" for="logOrigin" data-i18n="origin"></label>
-            <select class="input select" id="logOrigin"></select>
             <label class="date-filter"><span data-i18n="dateFrom"></span><input class="input" type="date" id="logFrom"></label>
             <label class="date-filter"><span data-i18n="dateTo"></span><input class="input" type="date" id="logTo"></label>
             <button type="button" class="btn btn--ghost btn--sm" data-action="export-withdrawals"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span data-i18n="exportCsv"></span></button>
@@ -214,7 +208,6 @@
               <th scope="col" data-i18n="cardNo"></th>
               <th scope="col" data-i18n="itemNo"></th>
               <th scope="col" data-i18n="fabricName"></th>
-              <th scope="col" data-i18n="origin"></th>
               <th scope="col" class="num" data-i18n="wQty"></th>
               <th scope="col" class="num" data-i18n="wCardAfter"></th>
               <th scope="col" class="num" data-i18n="wItemTotal"></th>
@@ -532,10 +525,6 @@
         <div class="field">
           <label for="eName" data-i18n="fabricName"></label>
           <input class="input" id="eName" name="name" autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="eOrigin" data-i18n="origin"></label>
-          <input class="input" id="eOrigin" name="origin" list="originList" autocomplete="off">
         </div>
         <div class="field">
           <label for="eQty" data-i18n="wQty"></label>

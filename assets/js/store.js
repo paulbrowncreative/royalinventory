@@ -267,8 +267,24 @@
     }, { cards: rows.length, opening: 0, withdrawals: 0, net: 0, low: 0, negative: 0, alerts: 0 });
     totals.opening = round(totals.opening); totals.withdrawals = round(totals.withdrawals); totals.net = round(totals.net);
 
+    // Item total remaining right after each withdrawal: replay the item's withdrawals in date order,
+    // swapping each card's previous balance for its balance after that withdrawal.
+    const itemAfter = new Map();
+    items.forEach((g) => {
+      const bal = new Map(g.rows.map((r) => [r.card.id, r.opening]));
+      let total = g.rows.reduce((t, r) => t + r.opening, 0);
+      g.rows.flatMap((r) => r.list)
+        .sort((a, b) => (a.date === b.date ? a.seq - b.seq : a.date < b.date ? -1 : 1))
+        .forEach((w) => {
+          const next = runningAfter.get(w.uid);
+          total += next - bal.get(w.cardId);
+          bal.set(w.cardId, next);
+          itemAfter.set(w.uid, round(total));
+        });
+    });
+
     const rowByCardId = new Map(rows.map((r) => [r.card.id, r]));
-    return { rows, rowByCardId, items, totals, runningAfter, threshold };
+    return { rows, rowByCardId, items, totals, runningAfter, itemAfter, threshold };
   }
 
   function statusOf(final, threshold) {

@@ -405,7 +405,7 @@ html[lang="en"] .empty-hero h3 { font-family: var(--font-display-en); font-size:
 .card-panel--form { background: linear-gradient(180deg, #211f1b, var(--surface)); border-color: var(--line-strong); }
 .w-form {
   display: grid;
-  grid-template-columns: 150px 170px repeat(3, minmax(110px, 1fr)) 140px minmax(160px, 1.3fr);
+  grid-template-columns: 150px 170px repeat(2, minmax(120px, 1fr)) 170px minmax(220px, 1.5fr);
   gap: var(--s-3);
   align-items: start;
 }
@@ -690,3 +690,11 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 .account__avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--gold-grad); color: var(--black); font-weight: 700; font-size: var(--fs-sm); }
 .account__name { font-size: var(--fs-sm); color: var(--text-2); max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) { .account__name { display: none; } .masthead__tools { flex-wrap: wrap; } }
+
+/* Withdrawal form: live remaining figures */
+.avail { gap: var(--s-3) var(--s-6); }
+.avail__fig { display: inline-flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+.avail__fig > span:first-child { color: var(--text-2); }
+.avail__arrow { color: var(--gold); }
+.avail__fig small { color: var(--muted); }
+html[dir="rtl"] .avail__arrow { display: inline-block; transform: scaleX(-1); }
