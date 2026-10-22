@@ -93,7 +93,7 @@ a.btn:hover{box-shadow:0 0 0 3px rgba(212,175,98,.55)}a.btn:focus-visible{outlin
 a.btn svg{width:20px;height:20px}
 small{display:block;margin-top:22px;color:var(--muted);font-size:.78rem}
 </style></head><body><main>
-<div class="lockup" dir="ltr" role="img" aria-label="Royal Fashion Club – رويال نادي الأناقة الملكي">
+<div class="lockup" dir="ltr" role="img" aria-label="Royal Fashion Club – رويال نادي الأناقة">
 <span class="mark wm wm-en"></span><span class="mark crest"></span><span class="mark wm wm-ar"></span></div>
 <div class="rule" aria-hidden="true"></div>
 <h1>نظام جرد الأقمشة</h1><p class="en" lang="en">Fabric Inventory System</p>

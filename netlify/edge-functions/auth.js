@@ -126,7 +126,7 @@ button bdi{font-weight:500}button:focus-visible,.link:focus-visible{outline:2px 
 .link bdi{color:inherit}
 small{display:block;margin-top:20px;color:var(--muted);font-size:.78rem}
 </style></head><body><main>
-<div class="lockup" dir="ltr" role="img" aria-label="Royal Fashion Club – رويال نادي الأناقة الملكي"><span class="mark wm wm-en"></span><span class="mark crest"></span><span class="mark wm wm-ar"></span></div>
+<div class="lockup" dir="ltr" role="img" aria-label="Royal Fashion Club – رويال نادي الأناقة"><span class="mark wm wm-en"></span><span class="mark crest"></span><span class="mark wm wm-ar"></span></div>
 <div class="rule" aria-hidden="true"></div>
 <h1>${T.title}</h1><p class="en" lang="en" dir="ltr">${T.titleEn}</p>
 ${message ? `<p class="msg msg--${tone}" role="${tone === 'error' ? 'alert' : 'status'}">${message}</p>` : ''}

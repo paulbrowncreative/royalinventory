@@ -3,7 +3,7 @@
   const dict = {
     ar: {
       brandName: 'رويال',
-      brandTag: 'نادي الأناقة الملكي',
+      brandTag: 'نادي الأناقة',
       appTitle: 'نظام جرد الأقمشة',
       appTagline: 'إدارة دقيقة لمخزون الأقمشة… بسهولة واحترافية',
       langSwitch: 'English',
