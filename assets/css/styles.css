@@ -651,7 +651,11 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 @media (max-width: 760px) {
   .table--items td:nth-child(3), .table--items td:nth-child(5), .table--items td:nth-child(6) { display: none; }
 }
-.table--inv td:nth-child(12) { white-space: nowrap; }
+.table--inv td:nth-child(8) { white-space: nowrap; }
+/* Remaining stock is the figure staff scan for. */
+.table--inv .col-key { background: rgba(212, 175, 98, 0.16); }
+.table--inv thead th.col-key { background: #2a2418; color: var(--gold-light); }
+.table--inv td.col-key strong { font-size: var(--fs-base); }
 .form-note { grid-column: 1 / -1; color: var(--gold-light); }
 
 /* History & cloud */

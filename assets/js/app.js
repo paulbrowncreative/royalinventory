@@ -225,7 +225,7 @@
       if (f.status === 'alerts-all') return r.status !== 'ok' || r.hasVariance;
       if (f.status && r.status !== f.status) return false;
       return true;
-    }).sort((a, b) => natural.compare(a.card.cardNo, b.card.cardNo));
+    }).sort((a, b) => natural.compare(a.card.itemNo, b.card.itemNo) || natural.compare(a.card.cardNo, b.card.cardNo));
   }
 
   function renderInventory(d) {
@@ -234,26 +234,26 @@
     const { slice, pager } = paginate(rows, ui.inv, 'inv');
     $('#invBody').innerHTML = slice.length ? slice.map((r) => {
       const c = r.card;
+      const label = `${c.itemNo} ${c.name}`;
       return `<tr>
-        <th scope="row" data-label="${t('cardNo')}" class="ltr-num">${esc(c.cardNo)}</th>
-        <td data-label="${t('entryDate')}" class="ltr-num">${esc(c.entryDate)}</td>
-        <td data-label="${t('itemNo')}" class="ltr-num">${esc(c.itemNo)}</td>
+        <th scope="row" data-label="${t('itemNo')}" class="ltr-num">${esc(c.itemNo)}</th>
         <td data-label="${t('fabricName')}">${esc(c.name)}</td>
         <td data-label="${t('origin')}">${esc(c.origin || '—')}</td>
+        <td data-label="${t('entryDate')}" class="ltr-num">${esc(c.entryDate)}</td>
         <td data-label="${t('openingStock')}" class="num">${fmt(r.opening)}</td>
-        <td data-label="${t('totalWithdrawals')}" class="num">${fmt(r.total)}</td>
-        <td data-label="${t('calcBalance')}" class="num">${fmt(r.calc)}</td>
-        <td data-label="${t('physicalCount')}" class="num">${c.physical !== null ? fmt(c.physical) : '—'}</td>
-        <td data-label="${t('finalStock')}" class="num"><strong class="${valueClass(r.status)}">${fmt(r.final)}</strong></td>
-        <td data-label="${t('variance')}" class="num ${r.hasVariance ? (r.variance < 0 ? 'v-neg' : 'v-warn') : ''}">${fmtSigned(r.variance)}</td>
+        <td data-label="${t('totalWithdrawals')}" class="num"><strong>${fmt(r.total)}</strong></td>
+        <td data-label="${t('finalStock')}" class="num col-key"><strong class="${valueClass(r.status)}">${fmt(r.final)}</strong></td>
         <td data-label="${t('stockAlert')}">${badges(r)}</td>
+        <td data-label="${t('physicalCount')}" class="num">${c.physical !== null ? fmt(c.physical) : '—'}</td>
+        <td data-label="${t('calcBalance')}" class="num">${fmt(r.calc)}</td>
+        <td data-label="${t('variance')}" class="num ${r.hasVariance ? (r.variance < 0 ? 'v-neg' : 'v-warn') : ''}">${fmtSigned(r.variance)}</td>
         <td data-label="${t('physicalDate')}" class="ltr-num">${esc(c.physicalDate || '—')}</td>
         <td class="actions">
-          <button type="button" class="icon-btn" data-count="${esc(c.id)}" title="${t('recordCount')}" aria-label="${t('recordCount')} ${esc(c.cardNo)}"><svg class="icon" aria-hidden="true"><use href="#i-clipboard"/></svg></button>
-          <button type="button" class="icon-btn" data-edit-card="${esc(c.id)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(c.cardNo)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
-          <button type="button" class="icon-btn icon-btn--danger" data-del-card="${esc(c.id)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(c.cardNo)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
+          <button type="button" class="icon-btn" data-count="${esc(c.id)}" title="${t('recordCount')}" aria-label="${t('recordCount')} ${esc(label)}"><svg class="icon" aria-hidden="true"><use href="#i-clipboard"/></svg></button>
+          <button type="button" class="icon-btn" data-edit-card="${esc(c.id)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(label)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+          <button type="button" class="icon-btn icon-btn--danger" data-del-card="${esc(c.id)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(label)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
         </td></tr>`;
-    }).join('') : `<tr class="row-empty"><td colspan="14">${Store.state.cards.length ? t('noResults') : `${t('noCardsYet')} <button type="button" class="btn btn--link" data-action="add-card">${t('addCard')}</button>`}</td></tr>`;
+    }).join('') : `<tr class="row-empty"><td colspan="13">${Store.state.cards.length ? t('noResults') : `${t('noCardsYet')} <button type="button" class="btn btn--link" data-action="add-card">${t('addCard')}</button>`}</td></tr>`;
     $('#invPager').innerHTML = pager;
   }
 
