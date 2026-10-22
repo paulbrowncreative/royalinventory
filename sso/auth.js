@@ -79,10 +79,11 @@ function page(message = '', status = 200, showButton = true, tone = 'error') {
 <style>
 :root{--gold:#d4af62;--gold-grad:linear-gradient(135deg,#f3dc9f 0%,#d4af62 38%,#a87e36 72%,#e2c27c 100%);--text:#f4efe4;--muted:#a79f8f;--line:rgba(212,175,98,.3)}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:radial-gradient(900px 500px at 80% -10%,rgba(212,175,98,.14),transparent 60%),repeating-linear-gradient(115deg,transparent 0 46px,rgba(240,215,154,.03) 52px,transparent 64px 110px),#0b0b0d;color:var(--text);font:400 1rem/1.6 "IBM Plex Sans Arabic","Segoe UI",Tahoma,sans-serif}
-main{width:min(440px,100%);text-align:center;padding:40px 28px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#1c1a18,#121214);box-shadow:0 30px 80px -30px #000}
+main{width:min(480px,100%);text-align:center;padding:40px 28px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#1c1a18,#121214);box-shadow:0 30px 80px -30px #000}
 .mark{display:block;margin:0 auto;background:var(--gold-grad);-webkit-mask:var(--logo) center/contain no-repeat;mask:var(--logo) center/contain no-repeat}
-.crest{--logo:url(/assets/img/brand/crest.png);width:84px;aspect-ratio:360/446;margin-bottom:14px}
-.wordmark{--logo:url(/assets/img/brand/wordmark-ar.png);width:190px;aspect-ratio:640/321;margin-bottom:22px}
+.lockup{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:24px}.lockup .mark{margin:0}
+.crest{--logo:url(/assets/img/brand/crest.png);height:72px;aspect-ratio:360/446}
+.wm{height:52px}.wm-en{--logo:url(/assets/img/brand/wordmark-en.png);aspect-ratio:640/285}.wm-ar{--logo:url(/assets/img/brand/wordmark-ar.png);aspect-ratio:640/321}
 .rule{width:56px;height:1px;background:var(--line);margin:0 auto 20px}
 h1{font:600 1.35rem/1.4 "Reem Kufi",serif;margin:0 0 6px}
 .en{font-family:"Cormorant Garamond",Georgia,serif;color:var(--muted);font-size:1.05rem;margin:0 0 24px}
@@ -92,8 +93,8 @@ a.btn:hover{box-shadow:0 0 0 3px rgba(212,175,98,.55)}a.btn:focus-visible{outlin
 a.btn svg{width:20px;height:20px}
 small{display:block;margin-top:22px;color:var(--muted);font-size:.78rem}
 </style></head><body><main>
-<span class="mark crest" aria-hidden="true"></span>
-<span class="mark wordmark" role="img" aria-label="رويال – نادي الأناقة الملكي · Royal Fashion Club"></span>
+<div class="lockup" dir="ltr" role="img" aria-label="Royal Fashion Club – رويال نادي الأناقة الملكي">
+<span class="mark wm wm-en"></span><span class="mark crest"></span><span class="mark wm wm-ar"></span></div>
 <div class="rule" aria-hidden="true"></div>
 <h1>نظام جرد الأقمشة</h1><p class="en" lang="en">Fabric Inventory System</p>
 ${message ? `<p class="msg msg--${tone}" role="${tone === 'error' ? 'alert' : 'status'}">${message}</p>` : ''}

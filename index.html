@@ -21,15 +21,17 @@
 
   <header class="masthead">
     <div class="masthead__inner container">
-      <a class="brand" href="#dashboard">
-        <span class="brand__crest logo-mask" aria-hidden="true"></span>
-        <span class="brand__wordmark logo-mask" aria-hidden="true"></span>
-        <span class="visually-hidden"><span data-i18n="brandName">رويال</span> – <span data-i18n="brandTag">نادي الأناقة الملكي</span></span>
-      </a>
       <div class="masthead__title">
         <h1 data-i18n="appTitle">نظام جرد الأقمشة</h1>
         <p data-i18n="appTagline">إدارة دقيقة لمخزون الأقمشة… بسهولة واحترافية</p>
       </div>
+      <!-- Bilingual lockup: English mark on the left, Arabic on the right, in both languages. -->
+      <a class="brand" href="#dashboard" dir="ltr">
+        <span class="brand__wordmark brand__wordmark--en logo-mask" aria-hidden="true"></span>
+        <span class="brand__crest logo-mask" aria-hidden="true"></span>
+        <span class="brand__wordmark brand__wordmark--ar logo-mask" aria-hidden="true"></span>
+        <span class="visually-hidden">Royal Fashion Club – رويال نادي الأناقة الملكي</span>
+      </a>
       <div class="masthead__tools">
         <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="dot"></span><span class="save-status__text" data-i18n="saved">محفوظ</span></span>
         <div class="account" id="account" hidden>
@@ -203,7 +205,6 @@
         <div class="table-wrap">
           <table class="table table--log">
             <thead><tr>
-              <th scope="col" data-i18n="wId"></th>
               <th scope="col" data-i18n="wDate"></th>
               <th scope="col" data-i18n="cardNo"></th>
               <th scope="col" data-i18n="itemNo"></th>

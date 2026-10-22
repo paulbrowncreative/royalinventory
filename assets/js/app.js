@@ -269,7 +269,7 @@
       if (!c) return false;
       if (f.from && w.date < f.from) return false;
       if (f.to && w.date > f.to) return false;
-      if (q && ![w.id, c.cardNo, fab.itemNo, fab.name, w.notes].some((v) => Store.norm(v).includes(q))) return false;
+      if (q && ![c.cardNo, fab.itemNo, fab.name, w.notes].some((v) => Store.norm(v).includes(q))) return false;
       return true;
     }).sort((a, b) => (a.w.date === b.w.date ? b.w.seq - a.w.seq : a.w.date < b.w.date ? 1 : -1));
   }
@@ -283,8 +283,7 @@
       const itemAfter = d.itemAfter.get(w.uid);
       const cls = after < 0 ? 'v-neg' : after <= d.threshold ? 'v-warn' : 'v-pos';
       return `<tr>
-        <th scope="row" data-label="${t('wId')}" class="ltr-num muted-cell">${esc(w.id)}</th>
-        <td data-label="${t('wDate')}" class="ltr-num">${esc(w.date)}</td>
+        <th scope="row" data-label="${t('wDate')}" class="ltr-num">${esc(w.date)}</th>
         <td data-label="${t('cardNo')}" class="ltr-num"><button type="button" class="link-cell" data-lookup="${esc(c.cardNo)}">${esc(c.cardNo)}</button></td>
         <td data-label="${t('itemNo')}" class="ltr-num">${esc(fab.itemNo)}</td>
         <td data-label="${t('fabricName')}">${esc(fab.name)}</td>
@@ -293,10 +292,10 @@
         <td data-label="${t('wItemTotal')}" class="num"><span class="${itemAfter < 0 ? 'v-neg' : itemAfter <= d.threshold ? 'v-warn' : 'v-pos'}">${fmt(itemAfter)}</span></td>
         <td data-label="${t('wNotes')}">${esc(w.notes || '—')}</td>
         <td class="actions">
-          <button type="button" class="icon-btn" data-edit-w="${esc(w.uid)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
-          <button type="button" class="icon-btn icon-btn--danger" data-del-w="${esc(w.uid)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(w.id)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
+          <button type="button" class="icon-btn" data-edit-w="${esc(w.uid)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(c.cardNo)} ${esc(w.date)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+          <button type="button" class="icon-btn icon-btn--danger" data-del-w="${esc(w.uid)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(c.cardNo)} ${esc(w.date)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
         </td></tr>`;
-    }).join('') : `<tr class="row-empty"><td colspan="10">${Store.state.withdrawals.length ? t('noResults') : t('noWithdrawalsYet')}</td></tr>`;
+    }).join('') : `<tr class="row-empty"><td colspan="9">${Store.state.withdrawals.length ? t('noResults') : t('noWithdrawalsYet')}</td></tr>`;
     $('#logPager').innerHTML = pager;
   }
 
@@ -385,7 +384,7 @@
     const tr = Store.state.trash;
     const items = [
       ...tr.cards.map((e) => ({ at: e.deletedAt, by: e.by, label: `${t('cardNo')} ${e.card.cardNo} · ${e.card.name}`, extra: e.withdrawals.length ? t('withLinked', { n: e.withdrawals.length }) : '', attr: `data-restore-card="${esc(e.card.id)}"` })),
-      ...tr.withdrawals.map((e) => ({ at: e.deletedAt, by: e.by, label: `${e.w.id} · ${fmt(e.w.qty)} ${t('kpiMeters')} · ${e.w.name || ''}`, extra: e.w.date, attr: `data-restore-w="${esc(e.w.uid)}"` })),
+      ...tr.withdrawals.map((e) => ({ at: e.deletedAt, by: e.by, label: `${e.w.date} · ${(Store.state.cards.find((c) => c.id === e.w.cardId) || {}).cardNo || ''} · ${fmt(e.w.qty)} ${t('kpiMeters')} · ${e.w.name || ''}`, extra: e.w.date, attr: `data-restore-w="${esc(e.w.uid)}"` })),
     ].sort((a, b) => (a.at < b.at ? 1 : -1));
     $('#trashList').innerHTML = items.length ? `<ul class="att-list">${items.map((x) => `<li class="att-item att-item--static">
       <span class="att-item__main"><span>${esc(x.label)}</span></span>
@@ -679,7 +678,7 @@
     const after = Math.round((r.final - entry.qty) * 100) / 100;
     if (after < 0 && !(await ask(t('wouldGoNegative', { v: fmt(after) }), { okLabel: t('addWithdrawal') }))) return;
     const w = Store.addWithdrawal({ ...entry, cardId: card.id });
-    toast(t('savedWithdrawal', { id: w.id, v: fmt(data().runningAfter.get(w.uid)) }), { undo: () => Store.deleteWithdrawal(w.uid) });
+    toast(t('savedWithdrawal', { q: fmt(w.qty), c: card.cardNo, v: fmt(data().runningAfter.get(w.uid)) }), { undo: () => Store.deleteWithdrawal(w.uid) });
     ['cardNo', 'qty', 'notes', ...FABRIC].forEach((k) => { wForm[k].value = ''; });
     lastAuto = { itemNo: '', name: '', origin: '' };
     updateWithdrawalPreview();
@@ -709,7 +708,7 @@
     const w = Store.state.withdrawals.find((x) => x.uid === wuid);
     const c = Store.state.cards.find((x) => x.id === w.cardId);
     $$('[aria-invalid]', wEdit).forEach((i) => setError(i, ''));
-    $('#wDialogTitle').textContent = `${t('editWithdrawal')} · ${w.id}`;
+    $('#wDialogTitle').textContent = `${t('editWithdrawal')} · ${c ? c.cardNo : ''} · ${w.date}`;
     wEdit.id.value = w.uid; wEdit.date.value = w.date; wEdit.cardNo.value = c ? c.cardNo : '';
     wEdit.qty.value = w.qty; wEdit.notes.value = w.notes;
     FABRIC.forEach((k) => { wEdit[k].value = w[k] ?? (c ? c[k] : ''); });
@@ -726,7 +725,7 @@
     if (!ok) return;
     const w = Store.updateWithdrawal(wEdit.id.value, { date: wEdit.date.value || Store.today(), cardId: card.id, qty, notes: wEdit.notes.value, itemNo: wEdit.itemNo.value, name: wEdit.name.value });
     wDialog.close();
-    toast(t('updatedWithdrawal', { id: w.id }));
+    toast(t('updatedWithdrawal'));
   });
 
   $$('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
@@ -780,9 +779,11 @@
     }
     if (ds.delW) {
       const w = Store.state.withdrawals.find((x) => x.uid === ds.delW);
-      if (!(await ask(t('confirmDeleteWithdrawal', { id: w.id }), { danger: true }))) return;
+      const wc = Store.state.cards.find((x) => x.id === w.cardId) || {};
+      const info = { q: fmt(w.qty), c: wc.cardNo || '', d: w.date };
+      if (!(await ask(t('confirmDeleteWithdrawal', info), { danger: true }))) return;
       Store.deleteWithdrawal(w.uid);
-      toast(t('deletedWithdrawal', { id: w.id }), { undo: () => Store.restoreWithdrawal(w.uid) });
+      toast(t('deletedWithdrawal', info), { undo: () => Store.restoreWithdrawal(w.uid) });
       return;
     }
     if (ds.restoreCard) { Store.restoreCard(ds.restoreCard); toast(t('restored')); return; }
@@ -858,7 +859,6 @@
   ];
   const W_COLS = [
     { key: 'date', label: () => t('wDate'), get: (x) => x.w.date },
-    { key: null, label: () => t('wId'), get: (x) => x.w.id },
     { key: 'cardNo', label: () => t('cardNo'), get: (x) => x.c.cardNo },
     { key: 'itemNo', label: () => t('itemNo'), get: (x) => x.fab.itemNo },
     { key: 'name', label: () => t('fabricName'), get: (x) => x.fab.name },

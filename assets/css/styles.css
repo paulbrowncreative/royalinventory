@@ -116,11 +116,13 @@ small { font-size: var(--fs-xs); }
 html[dir="rtl"] .masthead::before { transform: scaleX(-1); }
 .masthead__inner {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--s-5);
   padding-block: var(--s-5) var(--s-4);
 }
+.masthead__title { justify-self: start; min-width: 0; }
+.masthead__tools { justify-self: end; }
 /* Brand marks: the supplied logos are used as alpha masks so they take the gold gradient. */
 .logo-mask {
   display: block;
@@ -131,15 +133,20 @@ html[dir="rtl"] .masthead::before { transform: scaleX(-1); }
 .brand {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
-  padding-inline-end: var(--s-5);
-  border-inline-end: 1px solid var(--line);
+  gap: var(--s-4);
   border-radius: var(--r-sm);
   text-decoration: none;
 }
-.brand__crest { --logo: url("../img/brand/crest.png"); width: 54px; aspect-ratio: 360 / 446; }
-.brand__wordmark { --logo: url("../img/brand/wordmark-ar.png"); height: 64px; aspect-ratio: 640 / 321; }
-html[lang="en"] .brand__wordmark { --logo: url("../img/brand/wordmark-en.png"); aspect-ratio: 640 / 285; }
+.brand__crest { --logo: url("../img/brand/crest.png"); height: 66px; aspect-ratio: 360 / 446; }
+.brand__wordmark { height: 56px; }
+.brand__wordmark--en { --logo: url("../img/brand/wordmark-en.png"); aspect-ratio: 640 / 285; }
+.brand__wordmark--ar { --logo: url("../img/brand/wordmark-ar.png"); aspect-ratio: 640 / 321; }
+.brand__wordmark--en, .brand__wordmark--ar { position: relative; }
+/* Hairline dividers either side of the crest. */
+.brand__crest { position: relative; margin-inline: var(--s-2); }
+.brand__crest::before, .brand__crest::after { content: ""; position: absolute; top: 15%; bottom: 15%; width: 1px; background: var(--line-strong); }
+.brand__crest::before { left: calc(-1 * var(--s-4)); }
+.brand__crest::after { right: calc(-1 * var(--s-4)); }
 .footer-crest { --logo: url("../img/brand/crest.png"); width: 16px; aspect-ratio: 360 / 446; }
 
 .masthead__title h1 {
@@ -568,8 +575,8 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   .field--notes { grid-column: span 2; }
 }
 @media (max-width: 960px) {
-  .masthead__inner { grid-template-columns: auto 1fr; }
-  .masthead__tools { grid-column: 1 / -1; justify-content: space-between; }
+  .masthead__inner { grid-template-columns: 1fr auto; row-gap: var(--s-3); }
+  .brand { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
   .dash-grid, .guide__cols, .settings-grid { grid-template-columns: 1fr; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpis > :first-child { grid-column: 1 / -1; }
@@ -583,9 +590,14 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 @media (max-width: 760px) {
   :root { --fs-base: 1rem; }
   .masthead__inner { gap: var(--s-4); padding-block: var(--s-4) var(--s-3); }
-  .brand { padding-inline-end: var(--s-4); }
-  .brand__crest { width: 40px; }
-  .brand__wordmark { height: 48px; }
+  .masthead__inner { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .masthead__title, .masthead__tools { justify-self: center; }
+  .masthead__tools { justify-content: center; }
+  .brand { gap: var(--s-3); }
+  .brand__crest { height: 50px; }
+  .brand__wordmark { height: 42px; }
+  .brand__crest::before { left: calc(-1 * var(--s-3)); }
+  .brand__crest::after { right: calc(-1 * var(--s-3)); }
   .masthead__title p { display: none; }
   .card-panel { padding: var(--s-4); }
   .toolbar { justify-content: stretch; }
@@ -621,7 +633,8 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   .kpi, .kpi__link { padding: var(--s-3); gap: var(--s-2); }
   .kpi__icon { width: 36px; height: 36px; }
   .w-form { grid-template-columns: 1fr; }
-  .brand__crest { display: none; }
+  .brand__wordmark { height: 36px; }
+  .brand__crest { height: 42px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
