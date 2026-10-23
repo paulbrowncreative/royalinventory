@@ -21,13 +21,13 @@
   --ivory-2: #efe8d8;
   --ink: #1b1813;
   --ink-2: #4a4336;
-  --pos: #2f8f55;   /* on ivory */
+  --pos: #1b5e33;   /* on ivory — darkened to keep ≥4.5:1 contrast on every table row tint */
   --pos-dk: #74d39a; /* on black */
-  --warn: #9a5d00;
+  --warn: #7d4a00;
   --warn-dk: #f0b552;
-  --neg: #b3261e;
+  --neg: #9a1a14;
   --neg-dk: #ff8a80;
-  --var: #6b4fb3;
+  --var: #5b3fa0;
   --var-dk: #c3b1ff;
 
   /* Type */
@@ -456,8 +456,8 @@ html[dir="rtl"] .table .num { text-align: left; }
 .v-pos { color: var(--pos); }
 .v-warn { color: var(--warn); }
 .v-neg { color: var(--neg); }
-.link-cell { background: none; border: 0; padding: 0; font-weight: 700; color: var(--gold-deep); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(156, 118, 52, 0.4); direction: ltr; }
-.link-cell:hover { color: #6e5121; }
+.link-cell { background: none; border: 0; padding: 0; font-weight: 700; color: #6e5121; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(156, 118, 52, 0.4); direction: ltr; }
+.link-cell:hover { color: #4f3a17; }
 
 .expand { display: inline-flex; align-items: center; gap: var(--s-2); background: none; border: 0; padding: 4px 0; cursor: pointer; color: var(--ink); min-height: 32px; }
 .expand .icon { color: var(--gold-deep); transition: transform var(--t); }
@@ -711,3 +711,16 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 .avail__arrow { color: var(--gold); }
 .avail__fig small { color: var(--muted); }
 html[dir="rtl"] .avail__arrow { display: inline-block; transform: scaleX(-1); }
+
+/* Unsaved-data safeguard */
+.leave-reasons { margin: 0; padding-inline-start: var(--s-5); display: grid; gap: var(--s-2); color: var(--text); }
+.leave-reasons li::marker { color: var(--warn-dk); }
+.leave-actions { justify-content: flex-start; }
+#saveNow { min-height: 36px; }
+/* Long labels (e.g. "Download template — Withdrawals template") must wrap instead of widening the page. */
+.btn--link { white-space: normal; text-align: start; }
+.btn-row > * { max-width: 100%; }
+@media (max-width: 480px) { .btn { white-space: normal; text-align: center; } }
+.save-status { white-space: nowrap; }
+.masthead__tools { flex-wrap: wrap; justify-content: flex-end; row-gap: var(--s-2); }
+@media (max-width: 1600px) { .account__name { display: none; } }

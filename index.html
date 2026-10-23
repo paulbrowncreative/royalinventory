@@ -34,6 +34,7 @@
       </a>
       <div class="masthead__tools">
         <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="dot"></span><span class="save-status__text" data-i18n="saved">محفوظ</span></span>
+        <button type="button" class="btn btn--gold btn--sm" id="saveNow" hidden><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span data-i18n="saveNow">حفظ الآن</span></button>
         <div class="account" id="account" hidden>
           <span class="account__avatar" aria-hidden="true"></span>
           <span class="account__name"></span>
@@ -365,10 +366,11 @@
         </section>
         <section class="card-panel" aria-labelledby="setAlertTitle">
           <header class="card-panel__head"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><h3 id="setAlertTitle" data-i18n="settingsGeneral"></h3></header>
-          <form id="settingsForm" class="stack">
+          <form id="settingsForm" class="stack" novalidate>
             <div class="field">
               <label for="setThreshold" data-i18n="lowThreshold"></label>
-              <input class="input input--num" type="number" id="setThreshold" min="0" step="0.01" inputmode="decimal" aria-describedby="setThresholdHelp" required>
+              <input class="input input--num" type="number" id="setThreshold" min="0" step="0.01" inputmode="decimal" aria-describedby="setThresholdMsg setThresholdHelp" required>
+              <p class="field__msg" id="setThresholdMsg"></p>
               <p class="field__help" id="setThresholdHelp" data-i18n="lowThresholdHelp"></p>
             </div>
             <div class="field">

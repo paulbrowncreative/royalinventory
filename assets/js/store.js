@@ -10,6 +10,10 @@
   const KEY = 'main';
   const META_KEY = 'sync';
   const LS_KEY = 'royal-inventory-state';
+  // Write-ahead journal: every change is copied synchronously to localStorage before the (async)
+  // IndexedDB save, so a tab closed mid-save loses nothing. One key per tab; replayed on next load.
+  const JOURNAL = 'royal-journal-';
+  const TAB_ID = Math.random().toString(36).slice(2, 10);
   const MAIN_FILE = '/royal-inventory.json';
   const HISTORY_DIR = '/history';
   const EPS = 0.0001;
@@ -32,6 +36,11 @@
   let syncTimer = null;
   let syncing = false;
   let syncAgain = false;
+  let syncPromise = null;
+  let syncError = null;   // last Dropbox failure, cleared by the next successful sync
+  let unsaved = [];       // ops applied in memory but not yet written to this device
+  let saveError = null;   // last local write failure
+  let baseRev = 0;        // local revision our in-memory state was built on (guards multi-tab writes)
   const listeners = new Set();
   const channel = 'BroadcastChannel' in window ? new BroadcastChannel('royal-inventory') : null;
 
@@ -89,34 +98,127 @@
     try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch (_) { return {}; }
   }
 
+  function journal() {
+    try {
+      if (unsaved.length) localStorage.setItem(JOURNAL + TAB_ID, JSON.stringify(unsaved));
+      else localStorage.removeItem(JOURNAL + TAB_ID);
+    } catch (_) { /* storage full: the IndexedDB save is still attempted */ }
+  }
+
+  // Replay changes a previous page left in its journal (ops are idempotent, so replaying ones
+  // that did reach IndexedDB is harmless).
+  function recoverJournals() {
+    let keys = [];
+    try { keys = Object.keys(localStorage).filter((k) => k.startsWith(JOURNAL) && k !== JOURNAL + TAB_ID); } catch (_) { return; }
+    keys.forEach((k) => {
+      let ops = [];
+      try { ops = JSON.parse(localStorage.getItem(k)) || []; } catch (_) {}
+      ops.forEach((op) => {
+        apply(state, op);
+        unsaved.push(op);
+        if (Cloud.connected() && !meta.pending.some((x) => x.id === op.id)) meta.pending.push(op);
+      });
+      try { localStorage.removeItem(k); } catch (_) {}
+    });
+    if (unsaved.length) { journal(); schedulePersist(); }
+  }
+
   async function load() {
     try { db = await openDb(); } catch (_) { db = null; }
     const { s, m } = await readLocal();
     state = normalize(s);
     meta = Object.assign(blankMeta(), m || {});
+    baseRev = state.localRev || 0;
+    recoverJournals();
     return state;
   }
 
   function emit(type, detail) { listeners.forEach((fn) => fn(type, detail)); }
 
+  // If another tab saved since our copy was loaded, rebuild on its copy and replay our unsaved ops,
+  // so concurrent edits in two tabs are merged instead of the last write winning.
+  function rebaseOnto(stored, storedMeta) {
+    const next = normalize(stored);
+    unsaved.forEach((op) => apply(next, op));
+    state = next;
+    if (storedMeta && Array.isArray(storedMeta.pending)) {
+      const ids = new Set(meta.pending.map((x) => x.id));
+      meta.pending = storedMeta.pending.filter((x) => !ids.has(x.id)).concat(meta.pending);
+    }
+    // Our Dropbox revision may no longer describe this merged copy; force the next sync to re-check.
+    if (Cloud.connected()) meta.rev = null;
+  }
+
+  // Read-compare-write in one IndexedDB transaction (transactions on a store are serialised across tabs).
+  function writeIdb() {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      const st = tx.objectStore(STORE);
+      let rebased = false;
+      const rs = st.get(KEY);
+      const rm = st.get(META_KEY);
+      let failure = null;
+      rm.onsuccess = () => {
+        try {
+          const stored = rs.result;
+          const storedRev = (stored && stored.localRev) || 0;
+          if (stored && storedRev !== baseRev) { rebaseOnto(stored, rm.result); rebased = true; }
+          state.localRev = storedRev + 1;
+          st.put(state, KEY);
+          st.put(meta, META_KEY);
+        } catch (e) {
+          failure = e; // e.g. storage full: roll the whole write back and report it
+          tx.abort();
+        }
+      };
+      tx.oncomplete = () => { baseRev = state.localRev; resolve(rebased); };
+      tx.onerror = (e) => e.preventDefault();
+      tx.onabort = () => reject(failure || tx.error || new Error('save aborted'));
+    });
+  }
+
+  function writeLocalStorage() {
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(LS_KEY)); } catch (_) {}
+    const storedRev = (stored && stored.s && stored.s.localRev) || 0;
+    const rebased = !!(stored && stored.s && storedRev !== baseRev);
+    if (rebased) rebaseOnto(stored.s, stored.m);
+    state.localRev = storedRev + 1;
+    localStorage.setItem(LS_KEY, JSON.stringify({ s: state, m: meta }));
+    baseRev = state.localRev;
+    return rebased;
+  }
+
   async function persist() {
+    clearTimeout(saveTimer);
+    const written = unsaved.length;
     try {
-      if (db) await idb('readwrite', (st) => { st.put(state, KEY); st.put(meta, META_KEY); });
-      else localStorage.setItem(LS_KEY, JSON.stringify({ s: state, m: meta }));
+      const rebased = db ? await writeIdb() : writeLocalStorage();
+      if (rebased) emit('change');
+      unsaved.splice(0, written);
+      journal();
+      saveError = null;
       if (channel) channel.postMessage('changed');
-      if (!Cloud.connected()) emit('status', { state: 'local' });
     } catch (e) {
       console.error(e);
-      emit('status', { state: 'save-error' });
+      saveError = e;
     }
+    setStatus();
+    return !saveError;
   }
-  function schedulePersist() { clearTimeout(saveTimer); saveTimer = setTimeout(persist, 250); }
+  function schedulePersist() { clearTimeout(saveTimer); saveTimer = setTimeout(persist, 30); }
 
   if (channel) {
+    // Another tab saved: adopt its copy, then replay any of our ops it has not seen yet.
     channel.onmessage = async () => {
       const { s, m } = await readLocal();
       state = normalize(s);
       meta = Object.assign(blankMeta(), m || {});
+      baseRev = state.localRev || 0;
+      unsaved.forEach((op) => {
+        apply(state, op);
+        if (Cloud.connected() && !meta.pending.some((x) => x.id === op.id)) meta.pending.push(op);
+      });
       emit('change');
     };
   }
@@ -161,7 +263,8 @@
         break;
       }
       case 'w.add': {
-        if (s.withdrawals.some((w) => w.uid === p.w.uid)) break; // idempotent on replay
+        const known = (w) => w.uid === p.w.uid;
+        if (s.withdrawals.some(known) || s.trash.withdrawals.some((e) => known(e.w)) || s.trash.cards.some((e) => e.withdrawals.some(known))) break; // idempotent on replay
         s.seq.withdrawal += 1;
         const w = Object.assign({}, p.w, {
           id: 'W-' + String(s.seq.withdrawal).padStart(6, '0'),
@@ -205,7 +308,9 @@
   }
 
   function dispatch(type, p) {
-    const op = { type, p, at: new Date().toISOString(), by: userName() };
+    const op = { id: uid('op'), type, p, at: new Date().toISOString(), by: userName() };
+    unsaved.push(op);
+    journal();
     apply(state, op);
     if (Cloud.connected()) { meta.pending.push(op); scheduleSync(1200); }
     schedulePersist();
@@ -384,6 +489,7 @@
 
   /* ---------- Dropbox sync ---------- */
   function setStatus() {
+    if (saveError) return emit('status', { state: 'save-error' });
     if (!Cloud.connected()) return emit('status', { state: 'local' });
     if (syncing) return emit('status', { state: 'syncing' });
     if (meta.pending.length) return emit('status', { state: navigator.onLine ? 'pending' : 'offline', pending: meta.pending.length });
@@ -406,9 +512,14 @@
     } catch (e) { console.warn('snapshot failed', e); }
   }
 
-  async function sync() {
-    if (!Cloud.connected()) return setStatus();
-    if (syncing) { syncAgain = true; return; }
+  function sync() {
+    if (!Cloud.connected()) return Promise.resolve(setStatus());
+    if (syncing) { syncAgain = true; return syncPromise; }
+    syncPromise = runSync();
+    return syncPromise;
+  }
+
+  async function runSync() {
     syncing = true;
     setStatus();
     let changed = false;
@@ -451,6 +562,7 @@
       meta.lastSync = new Date().toISOString();
     } catch (e) {
       console.warn('sync failed', e);
+      syncError = e;
       if (e.auth) emit('status', { state: 'auth' });
       else emit('status', { state: navigator.onLine ? 'sync-error' : 'offline', pending: meta.pending.length });
       syncing = false;
@@ -459,6 +571,7 @@
       return;
     }
     syncing = false;
+    syncError = null;
     schedulePersist();
     if (changed) emit('change');
     setStatus();
@@ -512,9 +625,40 @@
   setInterval(() => { if (Cloud.connected() && document.visibilityState === 'visible') sync(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Cloud.connected()) sync(); });
   window.addEventListener('online', () => Cloud.connected() && sync());
+  // Write immediately when the page is hidden or closed instead of waiting for the debounce.
+  const flushNow = () => { if (unsaved.length) persist(); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushNow(); });
+  window.addEventListener('pagehide', flushNow);
   window.addEventListener('beforeunload', (e) => {
-    if (Cloud.connected() && meta.pending.length) { e.preventDefault(); e.returnValue = ''; }
+    flushNow();
+    if (unsaved.length || saveError || (Cloud.connected() && meta.pending.length)) { e.preventDefault(); e.returnValue = ''; }
   });
+
+  // What is not yet safely stored, for the "save before signing out" safeguard.
+  function health() {
+    const cloud = Cloud.connected();
+    return {
+      local: unsaved.length === 0 && !saveError,
+      cloud: !cloud || meta.pending.length === 0,
+      cloudConnected: cloud,
+      pending: cloud ? meta.pending.length : 0,
+      saveError: !!saveError,
+      syncError: !!syncError,
+    };
+  }
+
+  // Save everything now: this device first, then Dropbox. Resolves with health().
+  async function flush() {
+    await persist();
+    if (Cloud.connected()) {
+      for (let i = 0; i < 3 && meta.pending.length; i++) {
+        await sync();
+        if (syncError) break;
+      }
+      await persist();
+    }
+    return health();
+  }
 
   window.Store = {
     load, compute, computeAsOf, periodSummary, today, num, norm, findCardByNo,
@@ -526,7 +670,7 @@
     setSettings: (patch) => dispatch('settings', patch),
     replaceAll: (raw) => dispatch('replace', { state: normalize(raw) }),
     reset() { dispatch('replace', { state: Object.assign(blank(), { settings: state.settings }) }); },
-    sync, linkCloud, unlinkCloud, setStatus,
+    sync, linkCloud, unlinkCloud, setStatus, flush, health,
     listHistory: () => Cloud.list(HISTORY_DIR),
     downloadHistory: (path) => Cloud.download(path),
     get state() { return state; },

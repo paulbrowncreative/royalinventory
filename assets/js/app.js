@@ -417,8 +417,10 @@
 
   /* ---------- Settings & Dropbox ---------- */
   function renderSettings() {
-    $('#setThreshold').value = Store.state.settings.lowThreshold;
-    try { $('#setUser').value = localStorage.getItem('royal-user') || ''; } catch (_) {}
+    // Re-renders happen on every save/sync; never overwrite a field the user is editing.
+    const th = $('#setThreshold'), user = $('#setUser');
+    if (document.activeElement !== th && !th.dataset.dirty) th.value = Store.state.settings.lowThreshold;
+    if (document.activeElement !== user && !user.dataset.dirty) { try { user.value = localStorage.getItem('royal-user') || ''; } catch (_) {} }
     $('#setUser').readOnly = !!ui.account;
     $('#setUserHelp').textContent = t(ui.account ? 'userFromGoogle' : 'userNameHelp');
     const box = $('#cloudPanel');
@@ -458,6 +460,7 @@
       pending: t('stPending', { n: d.pending }), offline: t('stOffline', { n: d.pending || 0 }), 'sync-error': t('stSyncError'), auth: t('stAuth'), 'save-error': t('saveError'),
     }[d.state];
     $('.save-status__text', el).textContent = text || '';
+    $('#saveNow').hidden = !['save-error', 'pending', 'offline', 'sync-error', 'auth'].includes(d.state);
     if (ui.tab === 'settings' && d.state !== 'syncing') renderSettings();
   }
 
@@ -493,7 +496,10 @@
     }
   }
 
-  $('#setUser').addEventListener('change', (e) => { try { localStorage.setItem('royal-user', e.target.value.trim()); } catch (_) {} });
+  const saveUserName = () => { const el = $('#setUser'); if (el.readOnly) return; try { localStorage.setItem('royal-user', el.value.trim()); } catch (_) {} delete el.dataset.dirty; };
+  $('#setUser').addEventListener('change', saveUserName);
+  $('#setUser').addEventListener('input', (e) => { e.target.dataset.dirty = '1'; });
+  $('#setThreshold').addEventListener('input', (e) => { e.target.dataset.dirty = '1'; setError(e.target, ''); });
 
   /* ---------- Toasts & confirm ---------- */
   function toast(msg, { undo, tone } = {}) {
@@ -525,7 +531,7 @@
       input.hidden = !word; input.value = '';
       const [no, yes] = $$('button', confirmDlg);
       no.textContent = cancelLabel || t('cancel');
-      yes.textContent = okLabel || (danger ? t('delete') : 'OK');
+      yes.textContent = okLabel || (danger ? t('delete') : t('confirm'));
       yes.className = 'btn ' + (danger ? 'btn--danger' : 'btn--gold');
       confirmDlg.onclose = () => {
         const ok = confirmDlg.returnValue === 'yes' && (!word || input.value.trim().toUpperCase() === word.toUpperCase());
@@ -539,7 +545,7 @@
 
   /* ---------- Field validation helpers ---------- */
   function setError(input, msg) {
-    const out = document.getElementById(input.getAttribute('aria-describedby'));
+    const out = document.getElementById((input.getAttribute('aria-describedby') || '').split(' ')[0]);
     input.setAttribute('aria-invalid', msg ? 'true' : 'false');
     if (out) out.textContent = msg || '';
     return !msg;
@@ -805,7 +811,7 @@
       case 'load-demo': if (await ask(t('demoConfirm'))) { loadDemo(); toast(t('demoLoaded')); } return;
       case 'export-cards': return exportCards();
       case 'export-withdrawals': return exportWithdrawals();
-      case 'backup': return download(`royal-inventory-backup-${Store.today()}.json`, JSON.stringify(Store.state, null, 1), 'application/json');
+      case 'backup': return downloadBackup();
       case 'template-cards': return download('cards-template.csv', toCsv([CARD_COLS.map((c) => c.label())], true));
       case 'template-withdrawals': return download('withdrawals-template.csv', toCsv([W_COLS.map((c) => c.label())], true));
       case 'reset':
@@ -827,9 +833,12 @@
 
   $('#settingsForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const v = Store.num($('#setThreshold').value);
-    if (v === null || v < 0) return $('#setThreshold').focus();
+    const th = $('#setThreshold');
+    const v = Store.num(th.value);
+    if (!setError(th, v === null || v < 0 ? t('thresholdInvalid') : '')) return th.focus();
     Store.setSettings({ lowThreshold: v });
+    delete th.dataset.dirty;
+    saveUserName();
     toast(t('settingsSaved'));
   });
 
@@ -984,6 +993,87 @@
     Store.setPhysical(ids['1004'], 27.5, '2026-10-15');
     Store.addWithdrawal({ date: '2026-10-14', cardId: extra.id, qty: 12, notes: 'ثوب' });
   }
+
+  /* ---------- Save safeguards ---------- */
+  async function saveNow() {
+    const btn = $('#saveNow');
+    btn.disabled = true;
+    const h = await Store.flush();
+    btn.disabled = false;
+    if (h.local && h.cloud) toast(t('savedOk'));
+    else toast(t('saveFailed'), { tone: 'error' });
+    return h;
+  }
+  $('#saveNow').addEventListener('click', saveNow);
+
+  const downloadBackup = () => download(`royal-inventory-backup-${Store.today()}.json`, JSON.stringify(Store.state, null, 1), 'application/json');
+
+  // Reasons the data on screen is not fully saved (after attempting to save everything).
+  function unsavedReasons(h) {
+    const r = [];
+    if (!h.local) r.push(t('unsavedLocal'));
+    if (!h.cloud) r.push(t('unsavedCloud', { n: nf0.format(h.pending) }));
+    if (wForm.cardNo.value.trim() || wForm.qty.value.trim()) r.push(t('unsavedDraft'));
+    if ([cardDialog, countDialog, wDialog].some((d) => d.open)) r.push(t('unsavedDialogOpen'));
+    return r;
+  }
+
+  const leaveDlg = document.createElement('dialog');
+  leaveDlg.className = 'dialog dialog--sm';
+  leaveDlg.setAttribute('aria-labelledby', 'leaveTitle');
+  leaveDlg.innerHTML = `<form method="dialog">
+    <header class="dialog__head"><h2 id="leaveTitle"></h2></header>
+    <div class="dialog__body stack"><ul class="leave-reasons"></ul><p class="muted leave-ask"></p></div>
+    <footer class="dialog__foot leave-actions">
+      <button type="button" class="btn btn--gold" data-leave="save"></button>
+      <button type="button" class="btn btn--ghost" data-leave="backup"></button>
+      <button type="button" class="btn btn--danger" data-leave="anyway"></button>
+      <button type="button" class="btn btn--link" data-leave="cancel"></button>
+    </footer></form>`;
+  document.body.appendChild(leaveDlg);
+
+  // Before signing out: save everything; if anything is still unsaved, let the user save,
+  // download a backup, or explicitly leave anyway.
+  async function confirmLeave() {
+    let h = await Store.flush();
+    let reasons = unsavedReasons(h);
+    if (!reasons.length) return true;
+    return new Promise((resolve) => {
+      const show = () => {
+        $('#leaveTitle').textContent = t('unsavedTitle');
+        $('.leave-reasons', leaveDlg).innerHTML = reasons.map((x) => `<li>${esc(x)}</li>`).join('');
+        $('.leave-ask', leaveDlg).textContent = t('unsavedAsk');
+      };
+      const labels = { save: t('saveNow'), backup: t('backupExport'), anyway: t('signOutAnyway'), cancel: t('cancel') };
+      $$('[data-leave]', leaveDlg).forEach((b) => { b.textContent = labels[b.dataset.leave]; });
+      const finish = (v) => { leaveDlg.onclick = null; leaveDlg.oncancel = null; leaveDlg.close(); resolve(v); };
+      leaveDlg.oncancel = (e) => { e.preventDefault(); finish(false); };
+      leaveDlg.onclick = async (e) => {
+        const b = e.target.closest('[data-leave]');
+        if (!b) return;
+        if (b.dataset.leave === 'cancel') return finish(false);
+        if (b.dataset.leave === 'anyway') return finish(true);
+        if (b.dataset.leave === 'backup') return downloadBackup();
+        b.disabled = true;
+        h = await Store.flush();
+        b.disabled = false;
+        reasons = unsavedReasons(h);
+        if (!reasons.length) { toast(t('savedOk')); return finish(true); }
+        if (!h.local || !h.cloud) toast(t('saveFailed'), { tone: 'error' });
+        show();
+      };
+      show();
+      leaveDlg.showModal();
+      $('[data-leave="save"]', leaveDlg).focus();
+    });
+  }
+
+  document.addEventListener('click', async (e) => {
+    const link = e.target.closest('a[href="/auth/logout"]');
+    if (!link) return;
+    e.preventDefault();
+    if (await confirmLeave()) location.href = link.href;
+  });
 
   /* ---------- Save status & boot ---------- */
   let renderQueued = false;

@@ -40,6 +40,13 @@ Sessions last 14 days of inactivity. Locally (without Netlify) the gate is not a
 An alternative Google sign-in gate (requires a Google Cloud OAuth client) is kept in `sso/google-auth.js`.
 
 ## Data & Dropbox
+**Autosave and safeguards.** Every change is saved immediately on the device (IndexedDB) and also copied
+synchronously to a small safety log, so a tab closed mid-save loses nothing (the log is replayed on next load).
+Two open tabs editing at once are merged, not overwritten. If a save or Dropbox upload fails, the header shows
+**Save now**; signing out first saves everything and, if anything is still unsaved (or a withdrawal is half-typed),
+a dialog offers **Save now**, **Download backup**, **Sign out anyway** or **Cancel**. Closing the tab with unsaved
+changes triggers the browser's leave warning.
+
 Every change is saved instantly in the browser (IndexedDB) and, once Dropbox is connected, uploaded to
 `Dropbox/Apps/<your app>/royal-inventory.json`. A full copy is also written to `history/YYYY-MM-DD.json` each day.
 Devices connected to the same Dropbox account share one inventory; edits made at the same time are merged
