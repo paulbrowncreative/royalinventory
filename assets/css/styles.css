@@ -754,3 +754,27 @@ html[dir="rtl"] .input--out { justify-content: flex-start; }
 /* Keep each row of boxes level even when one label wraps onto two lines. */
 .w-form { align-items: end; }
 .w-form .field--submit { align-self: stretch; }
+
+/* ---------- Phone form layout (fixes overlapping boxes on iPhone) ---------- */
+/* iOS Safari gives date inputs an intrinsic minimum width, so they overflowed into the next
+   column. Let every control shrink to its column, and render dates like ordinary text boxes. */
+.field, .field > *, .date-filter, .date-filter > * { min-width: 0; }
+.input, select.input { max-width: 100%; }
+input[type="date"].input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  line-height: 44px;
+}
+input[type="date"].input::-webkit-date-and-time-value { text-align: start; margin: 0; }
+input[type="date"].input::-webkit-calendar-picker-indicator { margin-inline-start: auto; }
+
+/* One column on phones: two narrow columns made long labels wrap and staggered the boxes. */
+@media (max-width: 640px) {
+  .w-form { grid-template-columns: 1fr; align-items: start; }
+  .w-form .field--notes, .w-form .field--submit { grid-column: 1 / -1; }
+  .form-grid { grid-template-columns: 1fr; }
+  .date-filter { flex: 1 1 100% !important; }
+}
