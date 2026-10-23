@@ -80,7 +80,7 @@
         <h3 data-i18n="emptyTitle"></h3>
         <p data-i18n="emptyBody"></p>
         <div class="btn-row">
-          <button type="button" class="btn btn--gold" data-action="add-card"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="addCard"></span></button>
+          <button type="button" class="btn btn--gold" data-action="goto-withdrawals"><svg class="icon" aria-hidden="true"><use href="#i-scissors"/></svg><span data-i18n="registerMovement"></span></button>
           <button type="button" class="btn btn--ghost" data-action="goto-settings"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg><span data-i18n="importCards"></span></button>
           <button type="button" class="btn btn--link" data-action="load-demo" data-i18n="loadDemo"></button>
         </div>
@@ -174,12 +174,19 @@
             <input class="input input--num" type="number" id="wQty" name="qty" min="0.01" step="0.01" inputmode="decimal" required placeholder="0.00" aria-describedby="wQtyMsg">
             <p class="field__msg" id="wQtyMsg"></p>
           </div>
+          <div class="field">
+            <label for="wRemain"><span data-i18n="wCardAfter"></span> <small data-i18n="afterHint"></small></label>
+            <output class="input input--num input--out" id="wRemain" for="wCard wQty" aria-live="polite">—</output>
+          </div>
+          <div class="field">
+            <label for="wItemRemain"><span data-i18n="wItemTotal"></span> <small data-i18n="afterHint"></small></label>
+            <output class="input input--num input--out" id="wItemRemain" for="wCard wQty" aria-live="polite">—</output>
+          </div>
           <div class="field field--notes">
             <label for="wNotes" data-i18n="wNotes"></label>
             <input class="input" id="wNotes" name="notes" autocomplete="off" data-i18n-ph="notesPh">
           </div>
           <div class="field field--submit">
-            <div class="avail" id="wAvail" aria-live="polite"></div>
             <button class="btn btn--gold btn--lg" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="addWithdrawal">إضافة السحب</span></button>
           </div>
         </form>
@@ -244,24 +251,18 @@
             <label class="visually-hidden" for="invStatus" data-i18n="stockAlert"></label>
             <select class="input select" id="invStatus"></select>
             <button type="button" class="btn btn--ghost btn--sm" data-action="export-cards"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span data-i18n="exportCsv"></span></button>
-            <button type="button" class="btn btn--gold btn--sm" data-action="add-card"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="addCard"></span></button>
           </div>
         </header>
         <div class="table-wrap">
           <table class="table table--inv">
             <thead><tr>
+              <th scope="col" data-i18n="entryDate"></th>
               <th scope="col" data-i18n="itemNo"></th>
               <th scope="col" data-i18n="fabricName"></th>
               <th scope="col" data-i18n="origin"></th>
-              <th scope="col" data-i18n="entryDate"></th>
               <th scope="col" class="num" data-i18n="openingStock"></th>
               <th scope="col" class="num" data-i18n="totalWithdrawals"></th>
               <th scope="col" class="num col-key" data-i18n="finalStock"></th>
-              <th scope="col" data-i18n="stockAlert"></th>
-              <th scope="col" class="num" data-i18n="physicalCount"></th>
-              <th scope="col" class="num" data-i18n="calcBalance"></th>
-              <th scope="col" class="num" data-i18n="variance"></th>
-              <th scope="col" data-i18n="physicalDate"></th>
               <th scope="col"><span class="visually-hidden" data-i18n="actions"></span></th>
             </tr></thead>
             <tbody id="invBody"></tbody>

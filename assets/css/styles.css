@@ -412,7 +412,7 @@ html[lang="en"] .empty-hero h3 { font-family: var(--font-display-en); font-size:
 .card-panel--form { background: linear-gradient(180deg, #211f1b, var(--surface)); border-color: var(--line-strong); }
 .w-form {
   display: grid;
-  grid-template-columns: 150px 170px repeat(2, minmax(120px, 1fr)) 170px minmax(220px, 1.5fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s-3);
   align-items: start;
 }
@@ -571,8 +571,6 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
    ========================================================================== */
 @media (max-width: 1280px) {
   .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .w-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .field--notes { grid-column: span 2; }
 }
 @media (max-width: 960px) {
   .masthead__inner { grid-template-columns: 1fr auto; row-gap: var(--s-3); }
@@ -654,17 +652,11 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 /* Table refinements: keep codes/dates on one line; pin the key column while scrolling wide tables. */
 .table td.ltr-num, .table tbody th.ltr-num { white-space: nowrap; }
 @media (min-width: 761px) {
-  .table--inv tbody th, .table--inv thead th:first-child { position: sticky; inset-inline-start: 0; z-index: 2; }
-  .table--inv tbody th { background: inherit; background-color: var(--ivory); box-shadow: inset -1px 0 0 #e4dac4; }
-  .table--inv tbody tr:nth-child(even) th { background-color: #f1ebdc; }
-  html[dir="rtl"] .table--inv tbody th { box-shadow: inset 1px 0 0 #e4dac4; }
-  .table--inv thead th:first-child { z-index: 3; }
 }
 /* Phones: the item summary only needs the decision-making figures. */
 @media (max-width: 760px) {
   .table--items td:nth-child(3), .table--items td:nth-child(5), .table--items td:nth-child(6) { display: none; }
 }
-.table--inv td:nth-child(8) { white-space: nowrap; }
 /* Remaining stock is the figure staff scan for. */
 .table--inv .col-key { background: rgba(212, 175, 98, 0.16); }
 .table--inv thead th.col-key { background: #2a2418; color: var(--gold-light); }
@@ -753,3 +745,12 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   .toasts { bottom: auto; top: max(12px, env(safe-area-inset-top)); }
   .toast { width: 100%; }
 }
+
+/* Withdrawal form: calculated (read-only) figures */
+.input--out { display: flex; align-items: center; justify-content: flex-end; background: var(--ivory-2); border-style: dashed; font-weight: 700; font-variant-numeric: tabular-nums; direction: ltr; }
+.input--out.v-pos { color: var(--pos); } .input--out.v-warn { color: var(--warn); } .input--out.v-neg { color: var(--neg); }
+html[dir="rtl"] .input--out { justify-content: flex-start; }
+.field--submit { justify-content: flex-end; }
+/* Keep each row of boxes level even when one label wraps onto two lines. */
+.w-form { align-items: end; }
+.w-form .field--submit { align-self: stretch; }

@@ -235,24 +235,18 @@
       const c = r.card;
       const label = `${c.itemNo} ${c.name}`;
       return `<tr>
+        <td data-label="${t('entryDate')}" class="ltr-num">${esc(c.entryDate)}</td>
         <th scope="row" data-label="${t('itemNo')}" class="ltr-num">${esc(c.itemNo)}</th>
         <td data-label="${t('fabricName')}">${esc(c.name)}</td>
         <td data-label="${t('origin')}">${esc(c.origin || '—')}</td>
-        <td data-label="${t('entryDate')}" class="ltr-num">${esc(c.entryDate)}</td>
         <td data-label="${t('openingStock')}" class="num">${fmt(r.opening)}</td>
         <td data-label="${t('totalWithdrawals')}" class="num"><strong>${fmt(r.total)}</strong></td>
         <td data-label="${t('finalStock')}" class="num col-key"><strong class="${valueClass(r.status)}">${fmt(r.final)}</strong></td>
-        <td data-label="${t('stockAlert')}">${badges(r)}</td>
-        <td data-label="${t('physicalCount')}" class="num">${c.physical !== null ? fmt(c.physical) : '—'}</td>
-        <td data-label="${t('calcBalance')}" class="num">${fmt(r.calc)}</td>
-        <td data-label="${t('variance')}" class="num ${r.hasVariance ? (r.variance < 0 ? 'v-neg' : 'v-warn') : ''}">${fmtSigned(r.variance)}</td>
-        <td data-label="${t('physicalDate')}" class="ltr-num">${esc(c.physicalDate || '—')}</td>
         <td class="actions">
-          <button type="button" class="icon-btn" data-count="${esc(c.id)}" title="${t('recordCount')}" aria-label="${t('recordCount')} ${esc(label)}"><svg class="icon" aria-hidden="true"><use href="#i-clipboard"/></svg></button>
           <button type="button" class="icon-btn" data-edit-card="${esc(c.id)}" title="${t('edit')}" aria-label="${t('edit')} ${esc(label)}"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
           <button type="button" class="icon-btn icon-btn--danger" data-del-card="${esc(c.id)}" title="${t('delete')}" aria-label="${t('delete')} ${esc(label)}"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
         </td></tr>`;
-    }).join('') : `<tr class="row-empty"><td colspan="13">${Store.state.cards.length ? t('noResults') : `${t('noCardsYet')} <button type="button" class="btn btn--link" data-action="add-card">${t('addCard')}</button>`}</td></tr>`;
+    }).join('') : `<tr class="row-empty"><td colspan="8">${Store.state.cards.length ? t('noResults') : t('noCardsYet')}</td></tr>`;
     $('#invPager').innerHTML = pager;
   }
 
@@ -569,6 +563,7 @@
     cardForm.name.value = card ? card.name : prefill.name || '';
     cardForm.origin.value = card ? card.origin : prefill.origin || '';
     cardForm.opening.value = card ? card.opening : '';
+    if (!card && prefill.itemNo) fillFromItem(cardForm); // known item: fill its name/origin
     cardDialog.showModal();
     (card || prefill.itemNo ? cardForm.opening : cardForm.itemNo).focus();
   }
@@ -660,20 +655,21 @@
     if (form.origin && !form.origin.value && g.origins.size) form.origin.value = [...g.origins][0];
   }
 
+  // Live "after this withdrawal" figures for the chosen card and its item.
   function updateWithdrawalPreview() {
     const card = Store.findCardByNo(wForm.cardNo.value);
-    const box = $('#wAvail');
-    if (!card) { box.innerHTML = ''; return; }
+    const outs = [$('#wRemain'), $('#wItemRemain')];
+    if (!card) { outs.forEach((o) => { o.textContent = '—'; o.className = 'input input--num input--out'; }); return; }
     const d = data();
     const r = d.rowByCardId.get(card.id);
     const g = d.items.get(Store.norm(card.itemNo) || '—');
     const qty = Store.num(wForm.qty.value) || 0;
     const cls = (v) => (v < 0 ? 'v-neg' : v <= d.threshold ? 'v-warn' : 'v-pos');
-    const fig = (label, now) => {
+    [r.final, g ? g.final : r.final].forEach((now, i) => {
       const after = Math.round((now - qty) * 100) / 100;
-      return `<span class="avail__fig"><span>${label}</span><strong class="ltr-num ${cls(now)}">${fmt(now)}</strong>${qty ? `<span class="avail__arrow" aria-hidden="true">→</span><strong class="ltr-num ${cls(after)}">${fmt(after)}</strong><small>${t('afterWithdrawal')}</small>` : ''}</span>`;
-    };
-    box.innerHTML = fig(t('wCardAfter'), r.final) + fig(t('wItemTotal'), g ? g.final : r.final);
+      outs[i].textContent = fmt(after);
+      outs[i].className = 'input input--num input--out ' + cls(after);
+    });
   }
   wForm.cardNo.addEventListener('input', () => { setError(wForm.cardNo, ''); autofillFromCard(); updateWithdrawalPreview(); });
   wForm.itemNo.addEventListener('change', () => fillFromItem(wForm));
@@ -806,7 +802,7 @@
         ...periodRows().map((g) => [g.itemNo, g.name, g.origin, g.count, g.cards.size, g.qty])], true));
     }
     switch (ds.action) {
-      case 'add-card': return openCardDialog();
+      case 'goto-withdrawals': showTab('withdrawals'); return wForm.cardNo.focus();
       case 'goto-settings': return showTab('settings');
       case 'load-demo': if (await ask(t('demoConfirm'))) { loadDemo(); toast(t('demoLoaded')); } return;
       case 'export-cards': return exportCards();

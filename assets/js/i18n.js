@@ -97,7 +97,7 @@
       fabricName: 'اسم الصنف',
       origin: 'مصدر الصنف',
       openingStock: 'رصيد البداية (متر)',
-      totalWithdrawals: 'إجمالي المسحوب (متر)',
+      totalWithdrawals: 'إجمالي السحوبات (متر)',
       calcBalance: 'المتبقي الدفتري (متر)',
       physicalCount: 'الجرد الفعلي (متر)',
       finalStock: 'المخزون المتبقي (متر)',
@@ -112,7 +112,8 @@
       wQty: 'الكمية المسحوبة (متر)',
       wNotes: 'اسم العميل / الملاحظات',
       wCardAfter: 'الكمية المتبقية (متر)',
-      wItemTotal: 'إجمالي المتبقي من الصنف (متر)',
+      wItemTotal: 'إجمالي الكمية المتبقية من الصنف (متر)',
+      afterHint: '(بعد السحب)',
 
       // Dashboard
       kpiCards: 'الكروت المسجلة',
@@ -215,8 +216,8 @@
       never: '—',
 
       // Empty states
-      emptyTitle: 'ابدأ بتسجيل أول كارت قماش',
-      emptyBody: 'أضف كروت الأقمشة برصيد البداية، ثم سجّل السحوبات يوميًا وسيحسب النظام الأرصدة والتنبيهات تلقائيًا.',
+      emptyTitle: 'ابدأ بتسجيل أول سحب',
+      emptyBody: 'عند تسجيل أول سحب لكارت جديد، يطلب النظام رصيد البداية مرة واحدة ويضيفه إلى الجرد تلقائيًا، ثم يحسب الأرصدة والتنبيهات تلقائيًا.',
       loadDemo: 'تحميل بيانات تجريبية',
       importCards: 'استيراد كروت من Excel',
       noResults: 'لا توجد نتائج مطابقة.',
@@ -255,7 +256,7 @@
       guideTitle: 'دليل الاستخدام',
       guideIntro: 'النظام مبني على كارت لكل لفة/قطعة قماش. كل سحب يُسجَّل على كارت، والنظام يحسب الأرصدة تلقائيًا.',
       guideSteps: [
-        ['أضف الكروت', 'من «صفحة الجرد» اضغط «إضافة كارت» وأدخل رقم الكارت ورقم الصنف واسمه ومصدره ورصيد البداية بالمتر.'],
+        ['سجّل القماش مع أول سحب', 'من «صفحة السحوبات» اكتب رقم كارت جديد والكمية — يطلب النظام مرة واحدة رقم الصنف واسمه ومصدره ورصيد البداية، ثم يضيفه إلى الجرد ويسجّل السحب.'],
         ['سجّل السحوبات', 'من «صفحة السحوبات» اختر رقم الكارت — تُملأ بيانات الصنف تلقائيًا — ثم أدخل الكمية واسم العميل واضغط «إضافة السحب» أو Enter.'],
         ['سجّل الجرد الفعلي', 'عند قياس الكارت فعليًا اضغط «تسجيل جرد فعلي» بجانب الكارت وأدخل الكمية المقاسة وتاريخ القياس.'],
         ['تابع التنبيهات', 'لوحة التحكم تعرض الكروت المنخفضة والسالبة وفروقات الجرد، ويمكنك البحث برقم الكارت أو تجميع الأرصدة برقم الصنف.'],
@@ -372,7 +373,7 @@
       fabricName: 'Fabric Name',
       origin: 'Fabric Origin',
       openingStock: 'Opening Stock (m)',
-      totalWithdrawals: 'Total Withdrawn (m)',
+      totalWithdrawals: 'Total Withdrawals (m)',
       calcBalance: 'Calculated Stock Balance (m)',
       physicalCount: 'Physical Stock Count (m)',
       finalStock: 'Remaining Stock (m)',
@@ -386,7 +387,8 @@
       wQty: 'Withdrawn Quantity (m)',
       wNotes: 'Customer Name / Notes',
       wCardAfter: 'Remaining Quantity (m)',
-      wItemTotal: 'Total Remaining for Item (m)',
+      wItemTotal: 'Total Remaining Quantity of Item (m)',
+      afterHint: '(after withdrawal)',
 
       kpiCards: 'Registered Fabric Cards',
       kpiOpening: 'Total Opening Stock',
@@ -483,8 +485,8 @@
       rights: 'All rights reserved',
       never: '—',
 
-      emptyTitle: 'Start by registering your first fabric card',
-      emptyBody: 'Add fabric cards with their opening stock, then log withdrawals daily. Balances and alerts are calculated automatically.',
+      emptyTitle: 'Start by recording your first withdrawal',
+      emptyBody: 'The first time you record a withdrawal for a new card, the system asks once for its opening stock and adds it to the inventory. Balances and alerts are then calculated automatically.',
       loadDemo: 'Load sample data',
       importCards: 'Import cards from Excel',
       noResults: 'No matching results.',
@@ -521,7 +523,7 @@
       guideTitle: 'User Guide',
       guideIntro: 'The system tracks one card per fabric roll/bolt. Every withdrawal is logged against a card and balances are calculated automatically.',
       guideSteps: [
-        ['Add cards', 'On the Inventory page, select “Add Card” and enter the card number, item number, fabric name, origin and opening stock in meters.'],
+        ['Register fabric with its first withdrawal', 'On the Withdrawals page, type a new card number and the quantity — the system asks once for the item number, fabric name, origin and opening stock, adds it to the inventory and records the withdrawal.'],
         ['Log withdrawals', 'On the Withdrawals page, choose the card number — fabric details fill in automatically — then enter the quantity and customer, and press “Add Withdrawal” or Enter.'],
         ['Record physical counts', 'When a card is physically measured, select “Record Physical Count” on its row and enter the measured meters and date.'],
         ['Watch the alerts', 'The dashboard flags low, negative and variance cards. Search by card number, or group balances by item number.'],
