@@ -766,7 +766,8 @@ input[type="date"].input {
   display: block;
   width: 100%;
   min-width: 0;
-  line-height: 44px;
+  height: 44px;
+  line-height: 42px; /* 44px box minus borders: same height as the other inputs */
 }
 input[type="date"].input::-webkit-date-and-time-value { text-align: start; margin: 0; }
 input[type="date"].input::-webkit-calendar-picker-indicator { margin-inline-start: auto; }

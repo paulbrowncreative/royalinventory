@@ -636,9 +636,18 @@
   let lastAuto = { itemNo: '', name: '', origin: '' };
   let pendingWithdrawal = null;
 
+  // Staff may type the card number, or the item number when that item has a single card.
+  function resolveCard(value) {
+    const byCard = Store.findCardByNo(value);
+    if (byCard) return byCard;
+    const n = Store.norm(value);
+    const matches = n ? Store.state.cards.filter((c) => Store.norm(c.itemNo) === n) : [];
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+
   // Fill fabric boxes from the chosen card, but never overwrite what the user typed.
   function autofillFromCard() {
-    const card = Store.findCardByNo(wForm.cardNo.value);
+    const card = resolveCard(wForm.cardNo.value);
     FABRIC.forEach((k) => {
       const input = wForm[k];
       const untouched = input.value === '' || input.value === lastAuto[k];
@@ -657,7 +666,7 @@
 
   // Live "after this withdrawal" figures for the chosen card and its item.
   function updateWithdrawalPreview() {
-    const card = Store.findCardByNo(wForm.cardNo.value);
+    const card = resolveCard(wForm.cardNo.value);
     const outs = [$('#wRemain'), $('#wItemRemain')];
     if (!card) { outs.forEach((o) => { o.textContent = '—'; o.className = 'input input--num input--out'; }); return; }
     const d = data();
@@ -696,11 +705,41 @@
     if (!ok) { $('[aria-invalid="true"]', wForm).focus(); return; }
     const entry = { date: wForm.date.value, qty, notes: wForm.notes.value };
     FABRIC.forEach((k) => { entry[k] = wForm[k].value; });
-    const card = Store.findCardByNo(wForm.cardNo.value);
+    const card = resolveCard(wForm.cardNo.value);
     if (card) return saveWithdrawal(entry, card);
-    // Unregistered card: register it (pre-filled with what was typed), then save the withdrawal.
-    pendingWithdrawal = entry;
-    openCardDialog(null, { cardNo: wForm.cardNo.value.trim(), itemNo: entry.itemNo, name: entry.name, origin: entry.origin }, t('registerCardFirst', { c: wForm.cardNo.value.trim() }));
+    // Items must be entered into inventory before they can be withdrawn.
+    const n = Store.norm(wForm.cardNo.value);
+    const several = Store.state.cards.filter((c) => Store.norm(c.itemNo) === n).length;
+    setError(wForm.cardNo, several > 1 ? t('severalCards', { n: several }) : t('notInInventory'));
+    wForm.cardNo.focus();
+  });
+
+  /* ---------- Inventory entry form ---------- */
+  const invForm = $('#invForm');
+  invForm.entryDate.value = Store.today();
+  const updateInvPreview = () => {
+    const op = Store.num(invForm.opening.value);
+    $('#iTotal').textContent = fmt(0);
+    $('#iRemain').textContent = fmt(op === null ? 0 : op);
+  };
+  invForm.opening.addEventListener('input', () => { setError(invForm.opening, ''); updateInvPreview(); });
+  invForm.itemNo.addEventListener('input', () => setError(invForm.itemNo, ''));
+  invForm.name.addEventListener('input', () => setError(invForm.name, ''));
+  invForm.itemNo.addEventListener('change', () => fillFromItem(invForm));
+  invForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = invForm;
+    const op = Store.num(f.opening.value);
+    let ok = setError(f.itemNo, f.itemNo.value.trim() ? '' : t('required'));
+    ok = setError(f.name, f.name.value.trim() ? '' : t('required')) && ok;
+    ok = setError(f.opening, op === null ? t('required') : op < 0 ? t('nonNegative') : '') && ok;
+    if (!ok) { $('[aria-invalid="true"]', f).focus(); return; }
+    // Each inventory entry is one card; its number is assigned automatically.
+    const card = Store.upsertCard({ cardNo: suggestCardNo(), entryDate: f.entryDate.value || Store.today(), itemNo: f.itemNo.value, name: f.name.value, origin: f.origin.value, opening: op });
+    toast(t('addedToInventory', { i: card.itemNo, c: card.cardNo }), { undo: () => Store.deleteCard(card.id) });
+    ['itemNo', 'name', 'origin', 'opening'].forEach((k) => { f[k].value = ''; });
+    updateInvPreview();
+    f.itemNo.focus();
   });
 
   /* ---------- Withdrawal edit dialog ---------- */
@@ -803,6 +842,7 @@
     }
     switch (ds.action) {
       case 'goto-withdrawals': showTab('withdrawals'); return wForm.cardNo.focus();
+      case 'goto-inventory-form': showTab('inventory'); return $('#iItemNo').focus();
       case 'goto-settings': return showTab('settings');
       case 'load-demo': if (await ask(t('demoConfirm'))) { loadDemo(); toast(t('demoLoaded')); } return;
       case 'export-cards': return exportCards();
@@ -974,12 +1014,12 @@
       ['1007', 'مخمل', 'إيطاليا', 10], ['1008', 'ساتان', 'تركيا', 20], ['1009', 'دنيم', 'الصين', 40],
     ];
     const ids = {};
+    // Never reuse a card number that already exists: sample data must not touch real records.
+    const freeNo = (no) => (Store.findCardByNo(no) ? suggestCardNo() : no);
     fabrics.forEach(([item, name, origin, opening], i) => {
-      const no = 'K-' + String(i + 1).padStart(4, '0');
-      if (Store.findCardByNo(no)) { ids[item] = Store.findCardByNo(no).id; return; }
-      ids[item] = Store.upsertCard({ cardNo: no, entryDate: '2026-10-01', itemNo: item, name, origin, opening }).id;
+      ids[item] = Store.upsertCard({ cardNo: freeNo('K-' + String(i + 1).padStart(4, '0')), entryDate: '2026-10-01', itemNo: item, name, origin, opening }).id;
     });
-    const extra = Store.findCardByNo('K-0010') || Store.upsertCard({ cardNo: 'K-0010', entryDate: '2026-10-01', itemNo: '1001', name: 'قطن سادة', origin: 'تركيا', opening: 320 });
+    const extra = Store.upsertCard({ cardNo: freeNo('K-0010'), entryDate: '2026-10-01', itemNo: '1001', name: 'قطن سادة', origin: 'تركيا', opening: 320 });
     [
       ['2026-10-08', '1009', 7, 'بنطال'], ['2026-10-08', '1008', 1.5, 'فستان سهرة'], ['2026-10-09', '1007', 4, 'ستارة'],
       ['2026-10-09', '1006', 6, ''], ['2026-10-10', '1001', 2, 'إعادة تفصيل'], ['2026-10-10', '1005', 1.2, 'فستان'],

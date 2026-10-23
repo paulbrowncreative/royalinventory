@@ -12,7 +12,7 @@ Plain HTML/CSS/JS with no build step and no dependencies.
 |---|---|
 | Dashboard · لوحة التحكم | KPIs, card lookup, alerts, search & group by item number |
 | Withdrawals · صفحة السحوبات | Fast withdrawal entry (auto-fills fabric details) + searchable log |
-| Inventory · صفحة الجرد | All fabric cards with calculated balances, physical counts, variance and alerts |
+| Inventory · صفحة الجرد | Add Item to Inventory form (entry date, item number, name, source, opening balance) and the inventory list with total withdrawals and remaining balance |
 | History & Archive · السجل والأرشيف | Stock on any past date, withdrawal summary for a period, deleted-records archive, daily Dropbox copies |
 | User Guide · دليل الاستخدام | Workflow and calculation rules |
 | Settings · الإعدادات | Dropbox connection, low-stock threshold, user name, CSV import, JSON backup/restore |

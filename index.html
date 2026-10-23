@@ -80,7 +80,7 @@
         <h3 data-i18n="emptyTitle"></h3>
         <p data-i18n="emptyBody"></p>
         <div class="btn-row">
-          <button type="button" class="btn btn--gold" data-action="goto-withdrawals"><svg class="icon" aria-hidden="true"><use href="#i-scissors"/></svg><span data-i18n="registerMovement"></span></button>
+          <button type="button" class="btn btn--gold" data-action="goto-inventory-form"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="addToInventory"></span></button>
           <button type="button" class="btn btn--ghost" data-action="goto-settings"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg><span data-i18n="importCards"></span></button>
           <button type="button" class="btn btn--link" data-action="load-demo" data-i18n="loadDemo"></button>
         </div>
@@ -233,6 +233,48 @@
     <!-- ============ INVENTORY ============ -->
     <section id="panel-inventory" role="tabpanel" aria-labelledby="tab-inventory" class="panel-view" hidden>
       <h2 class="visually-hidden" data-i18n="tabInventory"></h2>
+      <section class="card-panel card-panel--form" aria-labelledby="invFormTitle">
+        <header class="card-panel__head">
+          <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>
+          <h3 id="invFormTitle" data-i18n="addToInventory">إضافة صنف للجرد</h3>
+        </header>
+        <form id="invForm" class="w-form" novalidate>
+          <div class="field">
+            <label for="iDate" data-i18n="entryDate"></label>
+            <input class="input" type="date" id="iDate" name="entryDate" required>
+          </div>
+          <div class="field">
+            <label for="iItemNo" data-i18n="itemNo"></label>
+            <input class="input" id="iItemNo" name="itemNo" list="itemList" autocomplete="off" required aria-describedby="iItemNoMsg">
+            <p class="field__msg" id="iItemNoMsg"></p>
+          </div>
+          <div class="field">
+            <label for="iName" data-i18n="fabricName"></label>
+            <input class="input" id="iName" name="name" autocomplete="off" required aria-describedby="iNameMsg">
+            <p class="field__msg" id="iNameMsg"></p>
+          </div>
+          <div class="field">
+            <label for="iOrigin" data-i18n="origin"></label>
+            <input class="input" id="iOrigin" name="origin" list="originList" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="iOpening" data-i18n="openingStock"></label>
+            <input class="input input--num" type="number" id="iOpening" name="opening" min="0" step="0.01" inputmode="decimal" required placeholder="0.00" aria-describedby="iOpeningMsg">
+            <p class="field__msg" id="iOpeningMsg"></p>
+          </div>
+          <div class="field">
+            <label for="iTotal"><span data-i18n="totalWithdrawals"></span> <small data-i18n="calcHint"></small></label>
+            <output class="input input--num input--out" id="iTotal">0.00</output>
+          </div>
+          <div class="field">
+            <label for="iRemain"><span data-i18n="finalStock"></span> <small data-i18n="calcHint"></small></label>
+            <output class="input input--num input--out" id="iRemain" aria-live="polite">0.00</output>
+          </div>
+          <div class="field field--submit">
+            <button class="btn btn--gold btn--lg" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="addToInventoryBtn">إضافة إلى الجرد</span></button>
+          </div>
+        </form>
+      </section>
       <section class="card-panel" aria-labelledby="invTitle">
         <header class="card-panel__head card-panel__head--split">
           <div class="card-panel__title">
