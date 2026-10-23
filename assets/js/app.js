@@ -383,11 +383,11 @@
 
     const tr = Store.state.trash;
     const items = [
-      ...tr.cards.map((e) => ({ at: e.deletedAt, by: e.by, label: `${t('cardNo')} ${e.card.cardNo} · ${e.card.name}`, extra: e.withdrawals.length ? t('withLinked', { n: e.withdrawals.length }) : '', attr: `data-restore-card="${esc(e.card.id)}"` })),
-      ...tr.withdrawals.map((e) => ({ at: e.deletedAt, by: e.by, label: `${e.w.date} · ${(Store.state.cards.find((c) => c.id === e.w.cardId) || {}).cardNo || ''} · ${fmt(e.w.qty)} ${t('kpiMeters')} · ${e.w.name || ''}`, extra: e.w.date, attr: `data-restore-w="${esc(e.w.uid)}"` })),
+      ...tr.cards.map((e) => ({ at: e.deletedAt, by: e.by, parts: [`${t('cardNo')} ${e.card.cardNo}`, e.card.name, e.withdrawals.length ? t('withLinked', { n: e.withdrawals.length }) : ''], attr: `data-restore-card="${esc(e.card.id)}"` })),
+      ...tr.withdrawals.map((e) => ({ at: e.deletedAt, by: e.by, parts: [e.w.date, (Store.state.cards.find((c) => c.id === e.w.cardId) || {}).cardNo || '', `${fmt(e.w.qty)} ${t('kpiMeters')}`, e.w.name || ''], attr: `data-restore-w="${esc(e.w.uid)}"` })),
     ].sort((a, b) => (a.at < b.at ? 1 : -1));
     $('#trashList').innerHTML = items.length ? `<ul class="att-list">${items.map((x) => `<li class="att-item att-item--static">
-      <span class="att-item__main"><span>${esc(x.label)}</span></span>
+      <span class="att-item__main"><span>${x.parts.filter(Boolean).map((v) => `<bdi>${esc(v)}</bdi>`).join(' · ')}</span></span>
       <span class="att-item__meta"><small class="ltr-num">${esc(fmtStamp(x.at))}${x.by ? ' · ' + esc(x.by) : ''}</small>
       <button type="button" class="btn btn--ghost btn--sm" ${x.attr}>${t('restore')}</button></span></li>`).join('')}</ul>`
       : `<p class="empty-note">${t('trashEmpty')}</p>`;
@@ -505,7 +505,7 @@
   function toast(msg, { undo, tone } = {}) {
     const el = document.createElement('div');
     el.className = 'toast' + (tone ? ' toast--' + tone : '');
-    el.innerHTML = `<span>${esc(msg)}</span>`;
+    el.innerHTML = `<span>${esc(msg).replace(/[A-Za-z]+-\d+|\d[\d,.]*\s?(?:م|m\b)/g, (m) => `<span class="nowrap">${m}</span>`)}</span>`;
     if (undo) {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'btn btn--link'; b.textContent = t('undo');

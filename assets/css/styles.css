@@ -724,3 +724,32 @@ html[dir="rtl"] .avail__arrow { display: inline-block; transform: scaleX(-1); }
 .save-status { white-space: nowrap; }
 .masthead__tools { flex-wrap: wrap; justify-content: flex-end; row-gap: var(--s-2); }
 @media (max-width: 1600px) { .account__name { display: none; } }
+
+/* ---------- Mobile bubble fixes ---------- */
+/* 1. Count chips ("9 items", "10 records") stay on one line; the heading wraps instead. */
+.pill { white-space: nowrap; flex: none; }
+.card-panel__title { min-width: 0; }
+.card-panel__title h2, .card-panel__title h3 { min-width: 0; }
+
+/* 2. Archive / daily-copy rows: let the description wrap and drop the actions onto their own
+      line when space runs out, instead of pushing the Restore button outside the box. */
+.att-item--static { flex-wrap: wrap; row-gap: var(--s-2); }
+.att-item--static .att-item__main { flex: 1 1 240px; flex-wrap: wrap; }
+.att-item--static .att-item__main span { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.att-item--static .att-item__meta { flex: 1 1 auto; flex-wrap: wrap; justify-content: space-between; min-width: 0; }
+.att-item--static .att-item__meta small { overflow-wrap: anywhere; }
+
+/* 3. Number boxes: no spinner arrows (they covered the typed value; phones never show them). */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* 4. Notifications: codes like K-0002 never split; on phones show them at the top, away from
+      the fields being typed into (the on-screen keyboard covers the bottom). */
+.nowrap { white-space: nowrap; }
+.toast { pointer-events: none; }
+.toast button { pointer-events: auto; flex: none; }
+@media (max-width: 760px) {
+  .toasts { bottom: auto; top: max(12px, env(safe-area-inset-top)); }
+  .toast { width: 100%; }
+}
