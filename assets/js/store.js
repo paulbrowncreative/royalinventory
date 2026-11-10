@@ -27,7 +27,7 @@
     seq: { withdrawal: 0 },
     updatedAt: null,
   });
-  const blankMeta = () => ({ rev: null, pending: [], lastSync: null, lastSnapshot: null });
+  const blankMeta = () => ({ rev: null, pending: [], lastSync: null, lastSnapshot: null, linked: null });
 
   let state = blank();
   let meta = blankMeta();
@@ -312,7 +312,7 @@
     unsaved.push(op);
     journal();
     apply(state, op);
-    if (Cloud.connected()) { meta.pending.push(op); scheduleSync(1200); }
+    if (Cloud.connected()) { meta.pending.push(op); scheduleSync(400); }
     schedulePersist();
     emit('change');
     return op;
@@ -514,6 +514,7 @@
 
   function sync() {
     if (!Cloud.connected()) return Promise.resolve(setStatus());
+    if (Cloud.kind && meta.linked !== Cloud.kind) return Promise.resolve(setStatus());
     if (syncing) { syncAgain = true; return syncPromise; }
     syncPromise = runSync();
     return syncPromise;
@@ -524,7 +525,8 @@
     setStatus();
     let changed = false;
     try {
-      for (let attempt = 0; attempt < 5; attempt++) {
+      let attempt = 0;
+      for (; attempt < 5; attempt++) {
         if (!meta.pending.length) {
           // Cheap metadata check first; only download when another device has saved.
           const rev = await Cloud.rev(MAIN_FILE);
@@ -559,6 +561,8 @@
           changed = true;
         }
       }
+      // Still behind after repeated conflicts (another device saving constantly): report it, retry later.
+      if (attempt === 5 && meta.pending.length) throw new Error('Could not upload after repeated conflicts');
       meta.lastSync = new Date().toISOString();
     } catch (e) {
       console.warn('sync failed', e);
@@ -597,6 +601,8 @@
           meta.rev = (await Cloud.upload(MAIN_FILE, JSON.stringify(state), 'overwrite')).rev;
           await snapshot(true);
         } else if (remoteHasData || !localHasData) {
+          // Adopting the shared copy: keep this device's own data as a restorable backup first.
+          if (localHasData) await Cloud.upload(`${HISTORY_DIR}/device-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, JSON.stringify(state), 'overwrite');
           state = r;
           meta.rev = remote.rev;
         } else {
@@ -606,6 +612,7 @@
       }
       meta.pending = [];
       meta.lastSync = new Date().toISOString();
+      meta.linked = Cloud.kind || 'dropbox';
     } finally {
       syncing = false;
       schedulePersist();
@@ -622,7 +629,16 @@
   }
 
   // Keep other devices' changes flowing in.
-  setInterval(() => { if (Cloud.connected() && document.visibilityState === 'visible') sync(); }, 60000);
+  // Pick up other devices' changes: on a timer while visible, and at once when the app is
+  // opened, brought back to the front or comes back online.
+  (function poll() {
+    setTimeout(() => {
+      if (Cloud.connected() && document.visibilityState === 'visible') sync();
+      poll();
+    }, Cloud.pollMs || 60000);
+  })();
+  window.addEventListener('focus', () => Cloud.connected() && sync());
+  window.addEventListener('pageshow', (e) => { if (e.persisted && Cloud.connected()) sync(); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Cloud.connected()) sync(); });
   window.addEventListener('online', () => Cloud.connected() && sync());
   // Write immediately when the page is hidden or closed instead of waiting for the debounce.
@@ -671,6 +687,7 @@
     replaceAll: (raw) => dispatch('replace', { state: normalize(raw) }),
     reset() { dispatch('replace', { state: Object.assign(blank(), { settings: state.settings }) }); },
     sync, linkCloud, unlinkCloud, setStatus, flush, health,
+    isLinked: () => meta.linked === (Cloud.kind || 'dropbox') || (!Cloud.kind && !!meta.rev),
     listHistory: () => Cloud.list(HISTORY_DIR),
     downloadHistory: (path) => Cloud.download(path),
     get state() { return state; },

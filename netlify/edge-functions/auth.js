@@ -187,6 +187,16 @@ export default async function auth(request, context) {
   if (!cfg) return page({ message: MSG.off, status: 503, view: 'none' });
   if (!cfg.disable_signup) return page({ message: MSG.open, status: 503, view: 'none' });
 
+  // Background renewal for long-open pages (the shared-storage client calls this on a 401).
+  if (path === '/auth/refresh' && request.method === 'POST') {
+    const rt = getCookie(request, RT);
+    const tokens = rt ? await tokenGrant(origin, { grant_type: 'refresh_token', refresh_token: rt }).catch(() => null) : null;
+    const user = tokens ? await getUser(origin, tokens.access_token).catch(() => null) : null;
+    const h = new Headers({ 'cache-control': 'no-store' });
+    (user ? sessionCookies(tokens) : clearCookies()).forEach((c) => h.append('set-cookie', c));
+    return new Response(null, { status: user ? 204 : 401, headers: h });
+  }
+
   if (request.method === 'POST' && path.startsWith('/auth/')) {
     const from = request.headers.get('origin');
     if (from && from !== origin) return new Response('Forbidden', { status: 403 });

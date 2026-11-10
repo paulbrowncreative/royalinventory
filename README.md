@@ -39,6 +39,16 @@ Sessions last 14 days of inactivity. Locally (without Netlify) the gate is not a
 
 An alternative Google sign-in gate (requires a Google Cloud OAuth client) is kept in `sso/google-auth.js`.
 
+## Shared storage (sync between devices)
+On Netlify the inventory is stored on the site itself (Netlify Function `netlify/functions/store.mjs` +
+Netlify Blobs, free tier). Every signed-in device shares one copy automatically — no setup. Each device
+links once: it uploads its data if the shared copy is empty, adopts the shared copy if it is empty itself,
+and asks only if both hold data (the replaced copy is always kept under History → Daily Backup Copies).
+Changes upload within a second, other devices pick them up within 30 s or as soon as the app is opened or
+brought to the front, and saves from two devices at once are merged (conditional writes + replay).
+Offline changes queue on the device and upload when it reconnects. When the site is opened without Netlify
+(e.g. locally) the app falls back to device storage and the optional Dropbox connection below.
+
 ## Data & Dropbox
 **Autosave and safeguards.** Every change is saved immediately on the device (IndexedDB) and also copied
 synchronously to a small safety log, so a tab closed mid-save loses nothing (the log is replayed on next load).
@@ -64,6 +74,8 @@ Deleted cards/withdrawals go to an archive and can be restored.
 ```
 index.html            markup, dialogs, icon sprite
 netlify/edge-functions/auth.js  staff sign-in gate (Netlify Identity)
+netlify/functions/store.mjs     shared storage API (Netlify Blobs)
+assets/js/server-store.js       client for the shared storage
 sso/google-auth.js    alternative Google sign-in gate (not deployed)
 assets/css/styles.css design tokens + components (black / gold / ivory)
 assets/js/i18n.js     Arabic & English strings

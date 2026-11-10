@@ -1,0 +1,9 @@
+{
+  "name": "royal-inventory",
+  "private": true,
+  "type": "module",
+  "description": "Royal Fashion Club fabric inventory dashboard (static site + Netlify functions)",
+  "dependencies": {
+    "@netlify/blobs": "10.7.13"
+  }
+}

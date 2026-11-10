@@ -419,6 +419,19 @@
     $('#setUserHelp').textContent = t(ui.account ? 'userFromGoogle' : 'userNameHelp');
     const box = $('#cloudPanel');
     const m = Store.meta;
+    if (Cloud === window.ServerCloud) {
+      $('#setCloudTitle').textContent = t('sharedTitle');
+      box.innerHTML = `
+        <p class="cloud-state ${Store.isLinked() ? 'cloud-state--on' : ''}"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t(Store.isLinked() ? 'sharedOn' : 'sharedLinking')}</p>
+        <dl class="cloud-facts">
+          <div><dt>${t('cloudLastSync')}</dt><dd class="ltr-num">${esc(fmtStamp(m.lastSync))}</dd></div>
+          <div><dt>${t('cloudPending')}</dt><dd class="ltr-num">${nf0.format(m.pending.length)}</dd></div>
+        </dl>
+        <p class="muted">${t('sharedHint')}</p>
+        <div class="btn-row"><button type="button" class="btn btn--gold" data-action="sync-now"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('syncNow')}</button></div>`;
+      return;
+    }
+    $('#setCloudTitle').textContent = t('cloudTitle');
     if (Cloud.connected()) {
       box.innerHTML = `
         <p class="cloud-state cloud-state--on"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('cloudConnected')}</p>
@@ -469,7 +482,12 @@
       case 'cloud-disconnect':
         if (await ask(t('cloudDisconnectConfirm'), { okLabel: t('cloudDisconnect') })) { Store.unlinkCloud(); ui.cloudHistory = null; render(); }
         return;
-      case 'sync-now': await Store.sync(); toast(t('stSynced', { t: '' })); return;
+      case 'sync-now': {
+        await ensureLinked();
+        const h = await Store.flush();
+        toast(h.local && h.cloud ? t('savedOk') : t('saveFailed'), { tone: h.local && h.cloud ? undefined : 'error' });
+        return;
+      }
       case 'copy-redirect':
         try { await navigator.clipboard.writeText(Cloud.redirectUri()); toast(t('copied')); } catch (_) { toast(Cloud.redirectUri()); }
         return;
@@ -1142,14 +1160,28 @@
     box.hidden = false;
   }
 
-  Store.load().then(async () => {
+  // Link this device to the site's shared storage once: upload its data if the shared copy is
+  // empty, adopt the shared copy if this device is empty, and ask only if both hold data.
+  let linking = null;
+  function ensureLinked() {
+    if (Cloud !== window.ServerCloud || !Cloud.connected() || Store.isLinked() || linking) return linking;
+    linking = Store.linkCloud((r) => ask(t('cloudChoice', { c: nf0.format(r.cards), w: nf0.format(r.withdrawals) }), { danger: true, okLabel: t('cloudUseLocal'), cancelLabel: t('cloudUseRemote') }))
+      .then(() => { toast(t('sharedLinked')); render(); })
+      .catch(() => Store.setStatus()) // offline: try again when the connection returns
+      .finally(() => { linking = null; });
+    return linking;
+  }
+  ['online', 'focus'].forEach((ev) => window.addEventListener(ev, () => ensureLinked()));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ensureLinked(); });
+
+  (async () => { if (await window.ServerCloud.detect()) window.Cloud = window.ServerCloud; })().then(() => Store.load()).then(async () => {
     loadAccount();
     let lang = 'ar';
     try { lang = localStorage.getItem('royal-lang') || 'ar'; } catch (_) {}
     I18N.set(lang);
     applyI18n();
     let linked = false;
-    try { linked = await Cloud.handleRedirect(); } catch (e) { toast(e.message, { tone: 'error' }); }
+    if (Cloud.handleRedirect) { try { linked = await Cloud.handleRedirect(); } catch (e) { toast(e.message, { tone: 'error' }); } }
     let start = location.hash.slice(1);
     if (!TABS.includes(start)) { try { start = localStorage.getItem('royal-tab'); } catch (_) {} }
     showTab(TABS.includes(start) ? start : 'dashboard', { push: !!start });
@@ -1159,7 +1191,8 @@
         await Store.linkCloud((r) => ask(t('cloudChoice', { c: nf0.format(r.cards), w: nf0.format(r.withdrawals) }), { danger: true, okLabel: t('cloudUseLocal'), cancelLabel: t('cloudUseRemote') }));
         toast(t('cloudLinked'));
       } catch (e) { toast(e.message, { tone: 'error' }); }
-    } else if (Cloud.connected()) Store.sync();
+    } else if (Cloud === window.ServerCloud && Cloud.connected() && !Store.isLinked()) await ensureLinked();
+    else if (Cloud.connected()) Store.sync();
     else Store.setStatus();
   });
 })();
