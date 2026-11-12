@@ -134,8 +134,9 @@
       const inner = `<span class="kpi__icon"><svg class="icon" aria-hidden="true"><use href="#${icon}"/></svg></span>
         <span class="kpi__body"><span class="kpi__value ltr-num">${meters ? fmt(v) : nf0.format(v)}</span>
         <span class="kpi__label">${t(label)}${hint ? ` <small>${esc(hint)}</small>` : ''}</span></span>`;
-      return `<li class="kpi${toneCls}">${filter ? `<button type="button" class="kpi__link" data-filter="${filter}">${inner}</button>` : inner}</li>`;
+      return `<li class="kpi${toneCls}">${filter ? `<button type="button" class="kpi__inner kpi__link" data-filter="${filter}">${inner}</button>` : `<div class="kpi__inner">${inner}</div>`}</li>`;
     }).join('');
+    requestAnimationFrame(fitKpiValues);
 
     renderLookup(d);
 
@@ -178,6 +179,20 @@
     }).join('') : `<tr class="row-empty"><td colspan="8">${Store.state.cards.length ? t('noResults') : t('noCardsYet')}</td></tr>`;
     $('#itemsPager').innerHTML = pager;
   }
+
+  // Safety net for long figures (e.g. millions): step the size down until the figure fits its tile.
+  function fitKpiValues() {
+    $$('.kpi__value').forEach((v) => {
+      v.style.fontSize = '';
+      let size = parseFloat(getComputedStyle(v).fontSize);
+      while (v.scrollWidth > v.clientWidth + 0.5 && size > 11) {
+        size -= 0.5;
+        v.style.fontSize = size + 'px';
+      }
+    });
+  }
+  window.addEventListener('resize', debounce(fitKpiValues, 120));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitKpiValues);
 
   function renderLookup(d) {
     const box = $('#lookupResult');

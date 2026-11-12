@@ -329,10 +329,12 @@ html[dir="rtl"] .select { background-position: left 10px center; }
   box-shadow: var(--shadow);
   min-width: 0;
 }
-.kpi > .kpi__icon, .kpi > .kpi__body { }
-.kpi, .kpi__link { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-4); }
-.kpi:has(.kpi__link) { padding: 0; }
-.kpi__link { width: 100%; height: 100%; background: none; border: 0; border-radius: inherit; text-align: start; cursor: pointer; transition: box-shadow var(--t); }
+/* Each tile is a size container: its figure is sized from the tile's own width (not the screen's),
+   so it can never be larger than its box. app.js also steps the size down for any unusually long
+   figure (fitKpiValues). */
+.kpi { container: kpi / inline-size; }
+.kpi__inner { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-4); width: 100%; height: 100%; min-width: 0; }
+.kpi__link { background: none; border: 0; border-radius: inherit; text-align: start; cursor: pointer; transition: box-shadow var(--t); color: inherit; font: inherit; }
 .kpi__link:hover { box-shadow: var(--glow); }
 .kpi__icon {
   display: grid; place-items: center; flex: none;
@@ -342,8 +344,15 @@ html[dir="rtl"] .select { background-position: left 10px center; }
   color: var(--gold);
 }
 .kpi__icon .icon { width: 20px; height: 20px; }
-.kpi__body { display: grid; min-width: 0; }
-.kpi__value { font-size: var(--fs-kpi); font-weight: 700; line-height: 1.15; color: var(--text); justify-self: start; }
+.kpi__body { display: grid; min-width: 0; flex: 1 1 auto; }
+.kpi__value { display: block; min-width: 0; white-space: nowrap; font-size: clamp(1rem, 12cqi, 1.85rem); font-weight: 700; line-height: 1.15; color: var(--text); text-align: left; }
+html[dir="rtl"] .kpi__value { text-align: right; }
+/* Narrow tiles (7 across on laptops and desktops): a smaller icon leaves more room for the figure. */
+@container kpi (max-width: 240px) {
+  .kpi__inner { gap: var(--s-2); padding: var(--s-3); }
+  .kpi__icon { width: 34px; height: 34px; }
+  .kpi__icon .icon { width: 17px; height: 17px; }
+}
 .kpi__label { font-size: var(--fs-sm); color: var(--text-2); line-height: 1.35; }
 .kpi__label small { display: block; color: var(--muted); }
 .kpi--warn .kpi__value { color: var(--warn-dk); }
@@ -628,8 +637,7 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   .table tbody tr.row-detail { margin-top: calc(var(--s-3) * -1); border-top: 0; border-radius: 0 0 var(--r-md) var(--r-md); background: #e9e0c9 !important; }
 }
 @media (max-width: 420px) {
-  .kpi, .kpi__link { padding: var(--s-3); gap: var(--s-2); }
-  .kpi__icon { width: 36px; height: 36px; }
+  .kpi__inner { padding: var(--s-3); gap: var(--s-2); }
   .w-form { grid-template-columns: 1fr; }
   .brand__wordmark { height: 36px; }
   .brand__crest { height: 42px; }
