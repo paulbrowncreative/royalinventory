@@ -256,5 +256,5 @@ export default async function auth(request, context) {
 export const config = {
   path: '/*',
   // Brand marks are shown on the sign-in page; /.netlify/* carries Identity's own API.
-  excludedPath: ['/assets/img/brand/*', '/robots.txt', '/.netlify/*'],
+  excludedPath: ['/assets/img/brand/*', '/robots.txt', '/.netlify/*', '/api/health'], // TEMPORARY: health check
 };
