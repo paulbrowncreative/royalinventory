@@ -41,6 +41,7 @@
   let unsaved = [];       // ops applied in memory but not yet written to this device
   let saveError = null;   // last local write failure
   let baseRev = 0;        // local revision our in-memory state was built on (guards multi-tab writes)
+  const diag = { lastUpload: null, lastDownload: null, lastCheck: null, lastError: null }; // for Settings → Sync status
   const listeners = new Set();
   const channel = 'BroadcastChannel' in window ? new BroadcastChannel('royal-inventory') : null;
 
@@ -491,6 +492,8 @@
   function setStatus() {
     if (saveError) return emit('status', { state: 'save-error' });
     if (!Cloud.connected()) return emit('status', { state: 'local' });
+    // Never claim "synced" for a device that has not finished linking to the shared copy.
+    if (Cloud.kind && meta.linked !== Cloud.kind) return emit('status', { state: syncError ? 'sync-error' : 'linking' });
     if (syncing) return emit('status', { state: 'syncing' });
     if (meta.pending.length) return emit('status', { state: navigator.onLine ? 'pending' : 'offline', pending: meta.pending.length });
     emit('status', { state: 'synced', at: meta.lastSync });
@@ -529,16 +532,25 @@
       for (; attempt < 5; attempt++) {
         if (!meta.pending.length) {
           // Cheap metadata check first; only download when another device has saved.
+          // null = no shared copy yet; '' = a copy whose revision is unknown, which must still be read.
           const rev = await Cloud.rev(MAIN_FILE);
+          diag.lastCheck = new Date().toISOString();
           if (rev && rev === meta.rev) break;
-          const remote = rev ? await Cloud.download(MAIN_FILE) : null;
+          const remote = rev === null ? null : await Cloud.download(MAIN_FILE);
           if (!remote) {
-            const r = await Cloud.upload(MAIN_FILE, JSON.stringify(state), null);
-            meta.rev = r.rev;
-            await snapshot(true);
-          } else if (remote.rev !== meta.rev && !meta.pending.length) {
+            try {
+              const r = await Cloud.upload(MAIN_FILE, JSON.stringify(state), null);
+              meta.rev = r.rev;
+              diag.lastUpload = new Date().toISOString();
+              await snapshot(true);
+            } catch (e) {
+              if (!e.conflict) throw e;
+              continue; // another device created it meanwhile: go round again and read theirs
+            }
+          } else if (remote.rev !== meta.rev || !remote.rev) {
             state = normalize(remote.data);
             meta.rev = remote.rev;
+            diag.lastDownload = new Date().toISOString();
             changed = true;
           }
           break;
@@ -547,6 +559,7 @@
         try {
           const r = await Cloud.upload(MAIN_FILE, JSON.stringify(state), meta.rev);
           meta.rev = r.rev;
+          diag.lastUpload = new Date().toISOString();
           meta.pending = meta.pending.slice(sent); // ops made during the upload stay queued
           await snapshot();
           if (!meta.pending.length) break;
@@ -567,6 +580,7 @@
     } catch (e) {
       console.warn('sync failed', e);
       syncError = e;
+      diag.lastError = { message: String((e && e.message) || e), at: new Date().toISOString() };
       if (e.auth) emit('status', { state: 'auth' });
       else emit('status', { state: navigator.onLine ? 'sync-error' : 'offline', pending: meta.pending.length });
       syncing = false;
@@ -613,6 +627,12 @@
       meta.pending = [];
       meta.lastSync = new Date().toISOString();
       meta.linked = Cloud.kind || 'dropbox';
+      syncError = null;
+      diag.lastDownload = diag.lastCheck = meta.lastSync;
+    } catch (e) {
+      syncError = e;
+      diag.lastError = { message: String((e && e.message) || e), at: new Date().toISOString() };
+      throw e;
     } finally {
       syncing = false;
       schedulePersist();
@@ -687,6 +707,7 @@
     replaceAll: (raw) => dispatch('replace', { state: normalize(raw) }),
     reset() { dispatch('replace', { state: Object.assign(blank(), { settings: state.settings }) }); },
     sync, linkCloud, unlinkCloud, setStatus, flush, health,
+    diagnostics: () => Object.assign({}, diag, { rev: meta.rev, linked: meta.linked, pending: meta.pending.length, lastSync: meta.lastSync, syncError: syncError ? String(syncError.message || syncError) : null }),
     isLinked: () => meta.linked === (Cloud.kind || 'dropbox') || (!Cloud.kind && !!meta.rev),
     listHistory: () => Cloud.list(HISTORY_DIR),
     downloadHistory: (path) => Cloud.download(path),

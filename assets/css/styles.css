@@ -687,7 +687,7 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 .cloud-facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s-3); }
 .cloud-facts div { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s-3); }
 .cloud-facts dt { font-size: var(--fs-xs); color: var(--muted); }
-.cloud-facts dd { margin: 2px 0 0; font-weight: 600; justify-self: start; }
+.cloud-facts dd { margin: 2px 0 0; font-weight: 600; justify-self: start; overflow-wrap: anywhere; }
 .cloud-steps { margin: 0; padding-inline-start: var(--s-5); display: grid; gap: var(--s-2); color: var(--text-2); font-size: var(--fs-sm); }
 .cloud-steps li::marker { color: var(--gold); font-weight: 700; }
 .cloud-steps a { color: var(--gold-light); display: inline-block; padding-block: 8px; }

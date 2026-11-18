@@ -1,5 +1,7 @@
 /* UI controller: rendering, forms, dialogs, import/export. */
 (function () {
+  // Must match assets/version.txt; bump both on every release so open tabs reload onto new code.
+  const APP_VERSION = '2026.11.18-2';
   const { t } = I18N;
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -50,6 +52,7 @@
     document.title = `${t('appTitle')} | ${t('brandName')} – ${t('brandTag')}`;
     $$('[data-close]').forEach((b) => b.matches('.icon-btn') && b.setAttribute('aria-label', lang === 'ar' ? 'إغلاق' : 'Close'));
     renderGuide();
+    if (lastStatus) showStatus(lastStatus); // the header status is live text, not a fixed label
   }
 
   /* ---------- Tabs ---------- */
@@ -435,12 +438,17 @@
     const box = $('#cloudPanel');
     const m = Store.meta;
     if (Cloud === window.ServerCloud) {
+      const dg = Store.diagnostics(), remote = Cloud.remoteInfo();
       $('#setCloudTitle').textContent = t('sharedTitle');
       box.innerHTML = `
         <p class="cloud-state ${Store.isLinked() ? 'cloud-state--on' : ''}"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t(Store.isLinked() ? 'sharedOn' : 'sharedLinking')}</p>
         <dl class="cloud-facts">
           <div><dt>${t('cloudLastSync')}</dt><dd class="ltr-num">${esc(fmtStamp(m.lastSync))}</dd></div>
           <div><dt>${t('cloudPending')}</dt><dd class="ltr-num">${nf0.format(m.pending.length)}</dd></div>
+          <div><dt>${t('diagChecked')}</dt><dd class="ltr-num">${esc(fmtStamp(dg.lastCheck))}</dd></div>
+          <div><dt>${t('diagRemoteSaved')}</dt><dd class="ltr-num">${esc(fmtStamp(remote.savedAt))}</dd></div>
+          <div><dt>${t('diagVersion')}</dt><dd class="ltr-num">${esc(APP_VERSION)}</dd></div>
+          ${dg.syncError ? `<div><dt>${t('diagError')}</dt><dd class="ltr-num">${esc(dg.syncError)}</dd></div>` : ''}
         </dl>
         <p class="muted">${t('sharedHint')}</p>
         <div class="btn-row"><button type="button" class="btn btn--gold" data-action="sync-now"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('syncNow')}</button></div>`;
@@ -474,15 +482,17 @@
       <div class="btn-row"><button type="button" class="btn btn--gold" data-action="cloud-connect"><svg class="icon" aria-hidden="true"><use href="#i-cloud"/></svg>${t('cloudConnect')}</button></div>`;
   }
 
+  let lastStatus = null;
   function showStatus(d) {
+    lastStatus = d;
     const el = $('#saveStatus');
     el.dataset.state = d.state;
     const text = {
       local: t('stLocal'), syncing: t('stSyncing'), synced: t('stSynced', { t: d.at ? new Date(d.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '' }),
-      pending: t('stPending', { n: d.pending }), offline: t('stOffline', { n: d.pending || 0 }), 'sync-error': t('stSyncError'), auth: t('stAuth'), 'save-error': t('saveError'),
+      pending: t('stPending', { n: d.pending }), offline: t('stOffline', { n: d.pending || 0 }), 'sync-error': t('stSyncError'), auth: t('stAuth'), 'save-error': t('saveError'), linking: t('stLinking'),
     }[d.state];
     $('.save-status__text', el).textContent = text || '';
-    $('#saveNow').hidden = !['save-error', 'pending', 'offline', 'sync-error', 'auth'].includes(d.state);
+    $('#saveNow').hidden = !['save-error', 'pending', 'offline', 'sync-error', 'auth', 'linking'].includes(d.state);
     if (ui.tab === 'settings' && d.state !== 'syncing') renderSettings();
   }
 
@@ -498,6 +508,7 @@
         if (await ask(t('cloudDisconnectConfirm'), { okLabel: t('cloudDisconnect') })) { Store.unlinkCloud(); ui.cloudHistory = null; render(); }
         return;
       case 'sync-now': {
+        if (!Cloud.connected() && window.ServerCloud.verdict() !== 'no' && await window.ServerCloud.detect()) useShared();
         await ensureLinked();
         const h = await Store.flush();
         toast(h.local && h.cloud ? t('savedOk') : t('saveFailed'), { tone: h.local && h.cloud ? undefined : 'error' });
@@ -1067,6 +1078,7 @@
   async function saveNow() {
     const btn = $('#saveNow');
     btn.disabled = true;
+    await ensureLinked();
     const h = await Store.flush();
     btn.disabled = false;
     if (h.local && h.cloud) toast(t('savedOk'));
@@ -1188,6 +1200,38 @@
   }
   ['online', 'focus'].forEach((ev) => window.addEventListener(ev, () => ensureLinked()));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ensureLinked(); });
+  // Keep retrying a link that failed (server hiccup, slow network) while the app is on screen.
+  setInterval(() => { if (document.visibilityState === 'visible') ensureLinked(); }, 20000);
+
+  // Switch to shared storage once it is reachable (a first visit on a slow connection starts on
+  // this device only; this upgrades it without a reload).
+  function useShared() {
+    if (Cloud === window.ServerCloud) return;
+    window.Cloud = window.ServerCloud;
+    Store.setStatus();
+    ensureLinked();
+    render();
+  }
+
+  // A device that keeps the app open (phones especially) would otherwise run old code after an
+  // update. When a new version is published, reload once everything is safely saved.
+  async function checkForUpdate() {
+    if (document.visibilityState !== 'visible' || location.protocol === 'file:') return;
+    try {
+      const res = await fetch('assets/version.txt', { cache: 'no-store', credentials: 'same-origin' });
+      if (!res.ok) return;
+      const v = (await res.text()).trim();
+      if (!/^[\w.-]{1,40}$/.test(v) || v === APP_VERSION) return;
+      // Reload at most once per published version, so a stale cache can never cause a loop.
+      try { if (sessionStorage.getItem('royal-reloaded-for') === v) return; } catch (_) { return; }
+      const h = await Store.flush();
+      if (!h.local || !h.cloud || $('dialog[open]') || document.activeElement.matches('input, textarea, select')) return;
+      try { sessionStorage.setItem('royal-reloaded-for', v); } catch (_) { return; }
+      location.reload();
+    } catch (_) { /* offline: try later */ }
+  }
+  setInterval(checkForUpdate, 5 * 60 * 1000);
+  document.addEventListener('visibilitychange', checkForUpdate);
 
   (async () => { if (await window.ServerCloud.detect()) window.Cloud = window.ServerCloud; })().then(() => Store.load()).then(async () => {
     loadAccount();
@@ -1209,5 +1253,7 @@
     } else if (Cloud === window.ServerCloud && Cloud.connected() && !Store.isLinked()) await ensureLinked();
     else if (Cloud.connected()) Store.sync();
     else Store.setStatus();
+    if (Cloud !== window.ServerCloud) window.ServerCloud.whenAvailable(useShared);
+    checkForUpdate();
   });
 })();

@@ -35,6 +35,21 @@ async function signedInUser(req) {
   return res.ok ? res.json() : null;
 }
 
+// The blob's current storage ETag (from the listing, which every Blobs backend reports).
+async function storageEtag(store, key) {
+  const { blobs } = await store.list({ prefix: key });
+  const b = blobs.find((x) => x.key === key);
+  return b ? b.etag : null;
+}
+
+// Revision id of a stored copy. A copy written without one (older versions) gets a stable
+// stand-in derived from its storage ETag, so devices can still read, compare and update it;
+// the next write stores a real revision id.
+const revOf = (metadata, etag) => (metadata && metadata.rev) || (etag ? 'etag:' + etag : '');
+
+// One line per request in the Netlify function log (Site → Logs → Functions → store).
+const log = (user, msg) => console.log(`[store] ${msg} user=${String(user && user.email || '').replace(/^(.).*@/, '$1***@')}`);
+
 export default async (req) => {
   const user = await signedInUser(req).catch(() => null);
   if (!user) return json(401, { error: 'unauthorized' });
@@ -54,13 +69,17 @@ export default async (req) => {
 
   if (req.method === 'GET' && url.searchParams.has('meta')) {
     const m = await store.getMetadata(key);
-    return m ? json(200, { etag: (m.metadata && m.metadata.rev) || '' }) : json(404, { error: 'not_found' });
+    if (!m) { log(user, `meta ${key} -> 404`); return json(404, { error: 'not_found' }); }
+    const rev = revOf(m.metadata, m.metadata && m.metadata.rev ? null : (m.etag || (await storageEtag(store, key))));
+    return json(200, { etag: rev, savedAt: (m.metadata && m.metadata.savedAt) || null });
   }
 
   if (req.method === 'GET') {
     const r = await store.getWithMetadata(key, { type: 'text' });
-    if (!r) return json(404, { error: 'not_found' });
-    return new Response(r.data, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-etag': (r.metadata && r.metadata.rev) || '' } });
+    if (!r) { log(user, `get ${key} -> 404`); return json(404, { error: 'not_found' }); }
+    const rev = revOf(r.metadata, r.metadata && r.metadata.rev ? null : (r.etag || (await storageEtag(store, key))));
+    log(user, `get ${key} rev=${rev.slice(0, 13)} bytes=${r.data.length}`);
+    return new Response(r.data, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-etag': rev, 'x-saved-at': (r.metadata && r.metadata.savedAt) || '' } });
   }
 
   if (req.method === 'PUT') {
@@ -77,15 +96,17 @@ export default async (req) => {
       // Pin the write to the blob as it is now (ETag from the listing), then confirm that blob is
       // the revision the device based its changes on. A write landing in between changes the ETag,
       // so the conditional set below fails instead of overwriting it.
-      const { blobs } = await store.list({ prefix: key });
-      const current = blobs.find((b) => b.key === key);
-      if (!current) return json(409, { error: 'conflict' });
-      const m = await store.getMetadata(key);
-      if (!m || !m.metadata || m.metadata.rev !== expected) return json(409, { error: 'conflict' });
-      opts.onlyIfMatch = current.etag;
+      const etag = await storageEtag(store, key);
+      const m = etag ? await store.getMetadata(key) : null;
+      if (!etag || !m || revOf(m.metadata, etag) !== expected) {
+        log(user, `put ${key} mode=update -> 409 (stale)`);
+        return json(409, { error: 'conflict' });
+      }
+      opts.onlyIfMatch = etag;
     }
     const res = await store.set(key, text, opts);
-    if (!res.modified) return json(409, { error: 'conflict' });
+    if (!res.modified) { log(user, `put ${key} mode=${mode} -> 409`); return json(409, { error: 'conflict' }); }
+    log(user, `put ${key} mode=${mode} -> 200 rev=${rev.slice(0, 8)} bytes=${text.length}`);
     return json(200, { etag: rev });
   }
 

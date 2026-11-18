@@ -44,10 +44,18 @@ On Netlify the inventory is stored on the site itself (Netlify Function `netlify
 Netlify Blobs, free tier). Every signed-in device shares one copy automatically — no setup. Each device
 links once: it uploads its data if the shared copy is empty, adopts the shared copy if it is empty itself,
 and asks only if both hold data (the replaced copy is always kept under History → Daily Backup Copies).
-Changes upload within a second, other devices pick them up within 30 s or as soon as the app is opened or
+Changes upload within a second, other devices pick them up within 20 s or as soon as the app is opened or
 brought to the front, and saves from two devices at once are merged (conditional writes + replay).
 Offline changes queue on the device and upload when it reconnects. When the site is opened without Netlify
 (e.g. locally) the app falls back to device storage and the optional Dropbox connection below.
+
+Settings → Shared Storage shows this device's sync status (last check, last shared save, pending
+changes, last error, app version) for troubleshooting. A device that cannot reach shared storage at first
+(slow connection) keeps retrying in the background and switches over by itself.
+
+**Releasing an update:** bump the version in both `assets/version.txt` and `APP_VERSION` at the top of
+`assets/js/app.js`. Devices that keep the app open reload onto the new version automatically once all
+their changes are saved.
 
 ## Data & Dropbox
 **Autosave and safeguards.** Every change is saved immediately on the device (IndexedDB) and also copied

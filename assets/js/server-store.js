@@ -25,32 +25,72 @@
     return res;
   }
 
-  // Is shared storage served here? Remembered so a device that opens offline still queues changes.
+  // Is shared storage served here? 'yes' / 'no' (definitely not, e.g. the site opened locally) /
+  // 'unknown' (slow or failed connection, expired session). The answer is remembered so a device
+  // that opens offline still queues its changes.
+  let verdict = 'unknown';
   async function detect() {
+    verdict = 'unknown';
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 12000);
     try {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 6000);
-      const res = await fetch(url({ ping: 1 }), { credentials: 'same-origin', cache: 'no-store', signal: ctl.signal });
-      clearTimeout(timer);
+      const opts = { credentials: 'same-origin', cache: 'no-store', signal: ctl.signal };
+      let res = await fetch(url({ ping: 1 }), opts);
+      if (res.status === 401) {
+        const r = await fetch('/auth/refresh', { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: ctl.signal }).catch(() => null);
+        if (r && r.ok) res = await fetch(url({ ping: 1 }), opts);
+      }
       const isJson = (res.headers.get('content-type') || '').includes('json');
-      if (res.ok && isJson) available = true;
-      else if (res.status === 404 || (res.ok && !isJson)) available = false;
-    } catch (_) { /* offline: keep what we knew */ }
+      if (res.ok && isJson) verdict = 'yes';
+      else if (res.status === 404 || (res.ok && !isJson)) verdict = 'no';
+    } catch (_) { /* offline or too slow: undecided */ }
+    clearTimeout(timer);
+    if (verdict !== 'unknown') available = verdict === 'yes';
     try { available ? localStorage.setItem(FLAG, '1') : localStorage.removeItem(FLAG); } catch (_) {}
     return available;
   }
 
+  // A first visit on a poor connection can leave the answer undecided: keep checking in the
+  // background (every 15 s and whenever the connection or the app comes back) until it is known.
+  function whenAvailable(cb) {
+    if (available || verdict === 'no') return;
+    let busy = false;
+    const attempt = async () => {
+      if (busy || available) return;
+      busy = true;
+      const ok = await detect();
+      busy = false;
+      if (ok) { stop(); cb(); } else if (verdict === 'no') stop();
+    };
+    const timer = setInterval(attempt, 15000);
+    const onVisible = () => { if (document.visibilityState === 'visible') attempt(); };
+    window.addEventListener('online', attempt);
+    window.addEventListener('focus', attempt);
+    document.addEventListener('visibilitychange', onVisible);
+    function stop() {
+      clearInterval(timer);
+      window.removeEventListener('online', attempt);
+      window.removeEventListener('focus', attempt);
+      document.removeEventListener('visibilitychange', onVisible);
+    }
+  }
+
+  // Current revision of the shared copy, or null when there is none yet.
+  const remoteInfo = { savedAt: null, checkedAt: null };
   async function rev(path) {
     const res = await call(url({ key: keyOf(path), meta: 1 }));
     if (res.status === 404) return null;
     if (!res.ok) throw new Error('Storage error ' + res.status);
-    return (await res.json()).etag;
+    const body = await res.json();
+    if (keyOf(path) === 'main') Object.assign(remoteInfo, { savedAt: body.savedAt || null, checkedAt: new Date().toISOString() });
+    return body.etag || '';
   }
 
   async function download(path) {
     const res = await call(url({ key: keyOf(path) }));
     if (res.status === 404) return null;
     if (!res.ok) throw new Error('Storage error ' + res.status);
+    if (keyOf(path) === 'main') Object.assign(remoteInfo, { savedAt: res.headers.get('x-saved-at') || remoteInfo.savedAt, checkedAt: new Date().toISOString() });
     return { data: JSON.parse(await res.text()), rev: res.headers.get('x-etag') };
   }
 
@@ -62,6 +102,7 @@
     const res = await call(url({ key: keyOf(path) }), { method: 'PUT', headers, body: text });
     if (res.status === 409) throw Object.assign(new Error('conflict'), { conflict: true });
     if (!res.ok) throw new Error('Storage error ' + res.status);
+    if (keyOf(path) === 'main') remoteInfo.savedAt = new Date().toISOString();
     return { rev: (await res.json()).etag };
   }
 
@@ -73,9 +114,11 @@
 
   window.ServerCloud = {
     kind: 'server',
-    pollMs: 30000,
+    pollMs: 20000,
     connected: () => available,
-    detect, rev, download, upload, list,
+    verdict: () => verdict,
+    remoteInfo: () => remoteInfo,
+    detect, whenAvailable, rev, download, upload, list,
     disconnect() {},
     appKey: () => '', redirectUri: () => '', hasConfigKey: () => true,
   };
