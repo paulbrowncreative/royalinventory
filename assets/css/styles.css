@@ -365,7 +365,8 @@ html[dir="rtl"] .kpi__value { text-align: right; }
 /* ==========================================================================
    Dashboard widgets
    ========================================================================== */
-.dash-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: var(--s-5); }
+.dash-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--s-5); }
+.dash-grid > * { min-width: 0; }
 .lookup { display: flex; gap: var(--s-2); }
 .lookup .input { flex: 1; }
 .lookup-result { margin-top: var(--s-4); }
@@ -388,7 +389,7 @@ html[dir="rtl"] .kpi__value { text-align: right; }
 .history li span:nth-child(2) { color: var(--text-2); }
 .history strong { color: var(--text); }
 
-.att-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.att-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 .att-item {
   width: 100%; display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
   min-height: 48px; padding: var(--s-2) var(--s-3);
@@ -396,8 +397,9 @@ html[dir="rtl"] .kpi__value { text-align: right; }
   cursor: pointer; text-align: start; transition: border-color var(--t), background var(--t);
 }
 .att-item:hover { border-color: var(--line-strong); background: rgba(212, 175, 98, 0.05); }
-.att-item__main { display: flex; gap: var(--s-2); align-items: baseline; min-width: 0; }
-.att-item__main span { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-item__main { display: flex; gap: var(--s-2); align-items: baseline; min-width: 0; flex: 1 1 auto; }
+.att-item__main strong { flex: none; white-space: nowrap; }
+.att-item__main span { color: var(--text-2); min-width: 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .att-item__meta { display: flex; gap: var(--s-2); align-items: center; flex: none; }
 .att-item .v-neg { color: var(--neg-dk); } .att-item .v-warn { color: var(--warn-dk); } .att-item .v-pos { color: var(--pos-dk); }
 .lookup-card .v-neg { color: var(--neg-dk); } .lookup-card .v-warn { color: var(--warn-dk); } .lookup-card .v-pos { color: var(--pos-dk); }
@@ -584,7 +586,7 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
 @media (max-width: 960px) {
   .masthead__inner { grid-template-columns: 1fr auto; row-gap: var(--s-3); }
   .brand { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
-  .dash-grid, .guide__cols, .settings-grid { grid-template-columns: 1fr; }
+  .dash-grid, .guide__cols, .settings-grid { grid-template-columns: minmax(0, 1fr); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpis > :first-child { grid-column: 1 / -1; }
   .w-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -735,7 +737,7 @@ html[dir="rtl"] .avail__arrow { display: inline-block; transform: scaleX(-1); }
       line when space runs out, instead of pushing the Restore button outside the box. */
 .att-item--static { flex-wrap: wrap; row-gap: var(--s-2); }
 .att-item--static .att-item__main { flex: 1 1 240px; flex-wrap: wrap; }
-.att-item--static .att-item__main span { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.att-item--static .att-item__main span { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; display: inline; -webkit-line-clamp: none; line-clamp: none; }
 .att-item--static .att-item__meta { flex: 1 1 auto; flex-wrap: wrap; justify-content: space-between; min-width: 0; }
 .att-item--static .att-item__meta small { overflow-wrap: anywhere; }
 

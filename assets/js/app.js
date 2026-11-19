@@ -1,7 +1,7 @@
 /* UI controller: rendering, forms, dialogs, import/export. */
 (function () {
   // Must match assets/version.txt; bump both on every release so open tabs reload onto new code.
-  const APP_VERSION = '2026.11.18-2';
+  const APP_VERSION = '2026.11.19-1';
   const { t } = I18N;
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -148,7 +148,7 @@
       .sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || a.final - b.final);
     $('#attention').innerHTML = att.length
       ? `<ul class="att-list">${att.slice(0, 8).map((r) => `<li><button type="button" class="att-item" data-lookup="${esc(r.card.cardNo)}">
-          <span class="att-item__main"><strong class="ltr-num">${esc(r.card.cardNo)}</strong> <span>${esc(r.card.name)}</span></span>
+          <span class="att-item__main"><strong class="ltr-num">${esc(r.card.cardNo)}</strong> <span dir="auto">${esc(r.card.name)}</span></span>
           <span class="att-item__meta">${badges(r)} <span class="ltr-num ${valueClass(r.status)}">${fmt(r.final)}</span></span></button></li>`).join('')}</ul>
         ${att.length > 8 ? `<button type="button" class="btn btn--link" data-filter="alerts-all">${t('viewAll')} (${att.length})</button>` : ''}`
       : `<p class="empty-note">${t('attentionEmpty')}</p>`;
