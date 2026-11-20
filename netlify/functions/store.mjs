@@ -3,8 +3,9 @@
  *   GET  /api/store?ping=1                 → { ok: true }            (availability check)
  *   GET  /api/store?key=main&meta=1        → { etag } | 404
  *   GET  /api/store?key=main               → JSON body, X-Etag header | 404
- *   PUT  /api/store?key=main               body = JSON text; X-Mode: add | update | overwrite;
- *                                          If-Match: <etag> for update → { etag } | 409 conflict
+ *   PUT  /api/store?key=main[&base=<etag>] body = JSON text; X-Mode: add | update | overwrite;
+ *                                          base revision (query `base`, or X-Base-Rev header) for
+ *                                          update → { etag } | 409 conflict
  *   GET  /api/store?list=history           → { entries: [{ name, path }] }
  *
  * Every saved copy carries its own revision id (blob metadata `rev`), returned together with the
@@ -91,7 +92,9 @@ export default async (req) => {
     const opts = { metadata: { rev, savedAt: new Date().toISOString(), by: user.email } };
     if (mode === 'add') opts.onlyIfNew = true;
     else if (mode === 'update') {
-      const expected = req.headers.get('if-match');
+      // The base revision travels in the query string and a custom header: Netlify's CDN consumes the
+      // standard If-Match header before it reaches this function (which caused "Storage error 428").
+      const expected = url.searchParams.get('base') || req.headers.get('x-base-rev') || req.headers.get('if-match');
       if (!expected) return json(428, { error: 'if-match required' });
       // Pin the write to the blob as it is now (ETag from the listing), then confirm that blob is
       // the revision the device based its changes on. A write landing in between changes the ETag,

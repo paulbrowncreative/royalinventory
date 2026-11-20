@@ -98,8 +98,10 @@
   async function upload(path, text, revision) {
     const mode = revision === 'overwrite' ? 'overwrite' : revision ? 'update' : 'add';
     const headers = { 'content-type': 'application/json', 'x-mode': mode };
-    if (mode === 'update') headers['if-match'] = revision;
-    const res = await call(url({ key: keyOf(path) }), { method: 'PUT', headers, body: text });
+    const params = { key: keyOf(path) };
+    // Not If-Match: Netlify's CDN strips that standard header before the function sees it.
+    if (mode === 'update') { headers['x-base-rev'] = revision; params.base = revision; }
+    const res = await call(url(params), { method: 'PUT', headers, body: text });
     if (res.status === 409) throw Object.assign(new Error('conflict'), { conflict: true });
     if (!res.ok) throw new Error('Storage error ' + res.status);
     if (keyOf(path) === 'main') remoteInfo.savedAt = new Date().toISOString();

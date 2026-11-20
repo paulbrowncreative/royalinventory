@@ -1,7 +1,7 @@
 /* UI controller: rendering, forms, dialogs, import/export. */
 (function () {
   // Must match assets/version.txt; bump both on every release so open tabs reload onto new code.
-  const APP_VERSION = '2026.11.19-1';
+  const APP_VERSION = '2026.11.20-1';
   const { t } = I18N;
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1225,7 +1225,9 @@
       // Reload at most once per published version, so a stale cache can never cause a loop.
       try { if (sessionStorage.getItem('royal-reloaded-for') === v) return; } catch (_) { return; }
       const h = await Store.flush();
-      if (!h.local || !h.cloud || $('dialog[open]') || document.activeElement.matches('input, textarea, select')) return;
+      // Only this device's own save must be complete: changes still waiting for shared storage are
+      // kept on the device and upload after the reload. Waiting for them could block a fix forever.
+      if (!h.local || $('dialog[open]') || document.activeElement.matches('input, textarea, select')) return;
       try { sessionStorage.setItem('royal-reloaded-for', v); } catch (_) { return; }
       location.reload();
     } catch (_) { /* offline: try later */ }
