@@ -12,6 +12,16 @@
   };
   const url = (params) => API + '?' + new URLSearchParams(params);
 
+  // Netlify Functions accept and return at most ~6 MB, so the inventory travels gzip-compressed
+  // (JSON shrinks about 10x). Browsers without CompressionStream send and receive plain JSON.
+  const canGzip = typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
+  const pipe = (data, stream) => new Response(new Blob([data]).stream().pipeThrough(stream)).arrayBuffer();
+  const gzip = (text) => pipe(text, new CompressionStream('gzip'));
+  const readText = async (res) => res.headers.get('x-body-encoding') === 'gzip'
+    ? new TextDecoder().decode(await pipe(await res.arrayBuffer(), new DecompressionStream('gzip')))
+    : res.text();
+  const accept = canGzip ? { headers: { 'x-accept-gzip': '1' } } : {};
+
   // Signed-in sessions renew themselves on page loads; a page left open longer than the access
   // token lives renews here instead, then retries once.
   async function call(target, init = {}, retried) {
@@ -87,11 +97,11 @@
   }
 
   async function download(path) {
-    const res = await call(url({ key: keyOf(path) }));
+    const res = await call(url({ key: keyOf(path) }), accept);
     if (res.status === 404) return null;
     if (!res.ok) throw new Error('Storage error ' + res.status);
     if (keyOf(path) === 'main') Object.assign(remoteInfo, { savedAt: res.headers.get('x-saved-at') || remoteInfo.savedAt, checkedAt: new Date().toISOString() });
-    return { data: JSON.parse(await res.text()), rev: res.headers.get('x-etag') };
+    return { data: JSON.parse(await readText(res)), rev: res.headers.get('x-etag') || '' };
   }
 
   // rev: null = create only, 'overwrite' = replace, otherwise only if still at that revision.
@@ -101,7 +111,12 @@
     const params = { key: keyOf(path) };
     // Not If-Match: Netlify's CDN strips that standard header before the function sees it.
     if (mode === 'update') { headers['x-base-rev'] = revision; params.base = revision; }
-    const res = await call(url(params), { method: 'PUT', headers, body: text });
+    let payload = text;
+    if (canGzip) {
+      try { payload = await gzip(text); headers['x-body-encoding'] = 'gzip'; headers['content-type'] = 'application/octet-stream'; } catch (_) { payload = text; }
+    }
+    const res = await call(url(params), { method: 'PUT', headers, body: payload });
+    if (res.status === 413) throw new Error('The inventory is too large for shared storage (413).');
     if (res.status === 409) throw Object.assign(new Error('conflict'), { conflict: true });
     if (!res.ok) throw new Error('Storage error ' + res.status);
     if (keyOf(path) === 'main') remoteInfo.savedAt = new Date().toISOString();

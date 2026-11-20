@@ -139,9 +139,7 @@
   // If another tab saved since our copy was loaded, rebuild on its copy and replay our unsaved ops,
   // so concurrent edits in two tabs are merged instead of the last write winning.
   function rebaseOnto(stored, storedMeta) {
-    const next = normalize(stored);
-    unsaved.forEach((op) => apply(next, op));
-    state = next;
+    state = replay(normalize(stored), unsaved);
     if (storedMeta && Array.isArray(storedMeta.pending)) {
       const ids = new Set(meta.pending.map((x) => x.id));
       meta.pending = storedMeta.pending.filter((x) => !ids.has(x.id)).concat(meta.pending);
@@ -216,8 +214,8 @@
       state = normalize(s);
       meta = Object.assign(blankMeta(), m || {});
       baseRev = state.localRev || 0;
+      replay(state, unsaved);
       unsaved.forEach((op) => {
-        apply(state, op);
         if (Cloud.connected() && !meta.pending.some((x) => x.id === op.id)) meta.pending.push(op);
       });
       emit('change');
@@ -225,6 +223,28 @@
   }
 
   /* ---------- Reducer ---------- */
+  const allCards = (s) => s.cards.concat(s.trash.cards.map((e) => e.card));
+  const cardNoTaken = (s, no, id) => { const n = norm(no); return !!n && allCards(s).some((c) => c.id !== id && norm(c.cardNo) === n); };
+  function nextCardNo(s) {
+    let max = 0;
+    allCards(s).forEach((c) => { const m = /^K-(\d+)$/i.exec(c.cardNo || ''); if (m && +m[1] > max) max = +m[1]; });
+    return 'K-' + String(max + 1).padStart(4, '0');
+  }
+
+  // Apply queued ops on top of another copy; report this device's new cards whose automatic number
+  // had to change, so staff can correct the label they wrote.
+  function replay(base, ops) {
+    const renumbered = [];
+    ops.forEach((op) => {
+      apply(base, op);
+      if (op.type === 'card.upsert' && op.p.autoNo) {
+        const c = base.cards.find((x) => x.id === op.p.id);
+        if (c && c.cardNo !== op.p.fields.cardNo) renumbered.push({ from: op.p.fields.cardNo, to: c.cardNo, itemNo: c.itemNo });
+      }
+    });
+    if (renumbered.length) setTimeout(() => emit('renumbered', renumbered), 0);
+    return base;
+  }
   function trashCardWithdrawal(s, w) {
     const entry = s.trash.cards.find((e) => e.card.id === w.cardId);
     if (entry) entry.withdrawals.push(w);
@@ -237,7 +257,11 @@
         const card = s.cards.find((c) => c.id === p.id);
         if (card) Object.assign(card, p.fields, { updatedAt: op.at });
         else if (!s.trash.cards.some((e) => e.card.id === p.id)) {
-          s.cards.push(Object.assign({ id: p.id, physical: null, physicalDate: '', createdAt: op.at, by: op.by }, p.fields, { updatedAt: op.at }));
+          const fields = Object.assign({}, p.fields);
+          // Automatic card numbers are chosen on each device; if another device already used this
+          // one (both added stock at the same time, or one was offline), take the next free number.
+          if (p.autoNo && cardNoTaken(s, fields.cardNo, p.id)) fields.cardNo = nextCardNo(s);
+          s.cards.push(Object.assign({ id: p.id, physical: null, physicalDate: '', createdAt: op.at, by: op.by }, fields, { updatedAt: op.at }));
         }
         break;
       }
@@ -457,7 +481,7 @@
       fields.physicalDate = fields.physical === null ? '' : data.physicalDate || today();
     }
     const id = data.id || uid('c');
-    dispatch('card.upsert', { id, fields });
+    dispatch('card.upsert', data.autoNo && !data.id ? { id, fields, autoNo: true } : { id, fields });
     return state.cards.find((c) => c.id === id);
   }
 
@@ -555,21 +579,21 @@
           }
           break;
         }
-        const sent = meta.pending.length;
+        // Remove exactly the ops that were uploaded (by id): another tab can rebuild the queue while
+        // the upload is in flight, so its position-based slice could drop ops that were never sent.
+        const sent = new Set(meta.pending.map((op) => op.id));
         try {
           const r = await Cloud.upload(MAIN_FILE, JSON.stringify(state), meta.rev);
           meta.rev = r.rev;
           diag.lastUpload = new Date().toISOString();
-          meta.pending = meta.pending.slice(sent); // ops made during the upload stay queued
+          meta.pending = meta.pending.filter((op) => !sent.has(op.id)); // ops made during the upload stay queued
           await snapshot();
           if (!meta.pending.length) break;
         } catch (e) {
           if (!e.conflict) throw e;
           // Another device saved first: rebuild from its copy and replay our queued ops.
           const remote = await Cloud.download(MAIN_FILE);
-          const base = remote ? normalize(remote.data) : blank();
-          meta.pending.forEach((op) => apply(base, op));
-          state = base;
+          state = replay(remote ? normalize(remote.data) : blank(), meta.pending);
           meta.rev = remote ? remote.rev : null;
           changed = true;
         }

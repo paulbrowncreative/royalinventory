@@ -46,7 +46,12 @@ links once: it uploads its data if the shared copy is empty, adopts the shared c
 and asks only if both hold data (the replaced copy is always kept under History → Daily Backup Copies).
 Changes upload within a second, other devices pick them up within 20 s or as soon as the app is opened or
 brought to the front, and saves from two devices at once are merged (conditional writes + replay).
-Offline changes queue on the device and upload when it reconnects. When the site is opened without Netlify
+Offline changes queue on the device and upload when it reconnects.
+Every save is confirmed by reading it back before the device clears its queue, data travels
+gzip-compressed (Netlify Functions cap bodies at ~6 MB; 40,000 withdrawals send as ~0.8 MB), and the base
+revision is sent as `?base=` / `X-Base-Rev` because Netlify's CDN strips the standard `If-Match` header.
+Automatically numbered cards that two devices create at the same time get the next free number on merge,
+and the device that made the card shows a notice so the label can be corrected. When the site is opened without Netlify
 (e.g. locally) the app falls back to device storage and the optional Dropbox connection below.
 
 Settings → Shared Storage shows this device's sync status (last check, last shared save, pending

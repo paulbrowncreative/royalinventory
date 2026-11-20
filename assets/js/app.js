@@ -1,7 +1,7 @@
 /* UI controller: rendering, forms, dialogs, import/export. */
 (function () {
   // Must match assets/version.txt; bump both on every release so open tabs reload onto new code.
-  const APP_VERSION = '2026.11.20-1';
+  const APP_VERSION = '2026.11.20-2';
   const { t } = I18N;
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -540,7 +540,8 @@
   $('#setThreshold').addEventListener('input', (e) => { e.target.dataset.dirty = '1'; setError(e.target, ''); });
 
   /* ---------- Toasts & confirm ---------- */
-  function toast(msg, { undo, tone } = {}) {
+  // sticky: stays until dismissed (for notices staff must act on).
+  function toast(msg, { undo, tone, sticky } = {}) {
     const el = document.createElement('div');
     el.className = 'toast' + (tone ? ' toast--' + tone : '');
     el.innerHTML = `<span>${esc(msg).replace(/[A-Za-z]+-\d+|\d[\d,.]*\s?(?:م|m\b)/g, (m) => `<span class="nowrap">${m}</span>`)}</span>`;
@@ -549,6 +550,14 @@
       b.type = 'button'; b.className = 'btn btn--link'; b.textContent = t('undo');
       b.onclick = () => { undo(); el.remove(); };
       el.appendChild(b);
+    }
+    if (sticky) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn--link'; b.textContent = t('gotIt');
+      b.onclick = () => el.remove();
+      el.appendChild(b);
+      $('#toasts').appendChild(el);
+      return;
     }
     $('#toasts').appendChild(el);
     setTimeout(() => el.classList.add('is-out'), undo ? 7000 : 3800);
@@ -613,8 +622,9 @@
   }
 
   function suggestCardNo() {
-    const nums = Store.state.cards.map((c) => /^K-(\d+)$/i.exec(c.cardNo)).filter(Boolean).map((m) => +m[1]);
-    const next = (nums.length ? Math.max(...nums) : 0) + 1;
+    let max = 0;
+    Store.state.cards.concat(Store.state.trash.cards.map((e) => e.card)).forEach((c) => { const m = /^K-(\d+)$/i.exec(c.cardNo || ''); if (m && +m[1] > max) max = +m[1]; });
+    const next = max + 1;
     return 'K-' + String(next).padStart(4, '0');
   }
 
@@ -704,9 +714,23 @@
   function fillFromItem(form) {
     const g = data().items.get(Store.norm(form.itemNo.value));
     if (!g) return;
-    if (!form.name.value) form.name.value = g.name;
-    if (form.origin && !form.origin.value && g.origins.size) form.origin.value = [...g.origins][0];
+    const fill = (input, value) => { if (input && !input.value && value) { input.value = value; input.dataset.auto = value; } };
+    fill(form.name, g.name);
+    if (g.origins.size) fill(form.origin, [...g.origins][0]);
   }
+  // A box filled in automatically is selected when focused, so typing replaces the suggestion
+  // instead of being appended to it ("Wool NavyWool Navy").
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (el.dataset && el.dataset.auto !== undefined) {
+      if (el.value === el.dataset.auto) {
+        el.select();
+        // A click would otherwise place the caret and undo the selection.
+        el.addEventListener('mouseup', (ev) => ev.preventDefault(), { once: true });
+      }
+      delete el.dataset.auto;
+    }
+  });
 
   // Live "after this withdrawal" figures for the chosen card and its item.
   function updateWithdrawalPreview() {
@@ -779,7 +803,7 @@
     ok = setError(f.opening, op === null ? t('required') : op < 0 ? t('nonNegative') : '') && ok;
     if (!ok) { $('[aria-invalid="true"]', f).focus(); return; }
     // Each inventory entry is one card; its number is assigned automatically.
-    const card = Store.upsertCard({ cardNo: suggestCardNo(), entryDate: f.entryDate.value || Store.today(), itemNo: f.itemNo.value, name: f.name.value, origin: f.origin.value, opening: op });
+    const card = Store.upsertCard({ autoNo: true, cardNo: suggestCardNo(), entryDate: f.entryDate.value || Store.today(), itemNo: f.itemNo.value, name: f.name.value, origin: f.origin.value, opening: op });
     toast(t('addedToInventory', { i: card.itemNo, c: card.cardNo }), { undo: () => Store.deleteCard(card.id) });
     ['itemNo', 'name', 'origin', 'opening'].forEach((k) => { f[k].value = ''; });
     updateInvPreview();
@@ -1166,6 +1190,7 @@
       return;
     }
     if (type === 'status') showStatus(detail);
+    if (type === 'renumbered') detail.forEach((r) => toast(t('cardRenumbered', { from: r.from, to: r.to, i: r.itemNo }), { tone: 'warn', sticky: true }));
   });
 
   $('#year').textContent = new Date().getFullYear();

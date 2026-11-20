@@ -391,16 +391,16 @@ html[dir="rtl"] .kpi__value { text-align: right; }
 
 .att-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 .att-item {
-  width: 100%; display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
+  width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--s-2) var(--s-3);
   min-height: 48px; padding: var(--s-2) var(--s-3);
   background: rgba(255, 255, 255, 0.02); border: 1px solid var(--line); border-radius: var(--r-md);
   cursor: pointer; text-align: start; transition: border-color var(--t), background var(--t);
 }
 .att-item:hover { border-color: var(--line-strong); background: rgba(212, 175, 98, 0.05); }
-.att-item__main { display: flex; gap: var(--s-2); align-items: baseline; min-width: 0; flex: 1 1 auto; }
+.att-item__main { display: flex; gap: var(--s-2); align-items: baseline; min-width: 0; flex: 1 1 9rem; }
 .att-item__main strong { flex: none; white-space: nowrap; }
-.att-item__main span { color: var(--text-2); min-width: 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
-.att-item__meta { display: flex; gap: var(--s-2); align-items: center; flex: none; }
+.att-item__main span { color: var(--text-2); min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: break-word; }
+.att-item__meta { display: flex; gap: var(--s-2); align-items: center; flex: none; margin-inline-start: auto; }
 .att-item .v-neg { color: var(--neg-dk); } .att-item .v-warn { color: var(--warn-dk); } .att-item .v-pos { color: var(--pos-dk); }
 .lookup-card .v-neg { color: var(--neg-dk); } .lookup-card .v-warn { color: var(--warn-dk); } .lookup-card .v-pos { color: var(--pos-dk); }
 
@@ -565,6 +565,7 @@ html[dir="rtl"] .expand .icon { transform: scaleX(-1); }
   transition: opacity 300ms, transform 300ms;
 }
 .toast--error { border-inline-start-color: var(--neg-dk); }
+.toast--warn { border-inline-start-color: var(--warn-dk); }
 .toast.is-out { opacity: 0; transform: translateY(6px); }
 
 /* ==========================================================================
