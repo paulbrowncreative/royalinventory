@@ -33,9 +33,17 @@ function jwtExp(token) {
 const identity = (origin, path, init = {}) => fetch(origin + '/.netlify/identity' + path, init);
 const json = (body) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
+// Identity's settings were fetched on every request (each page, script, image and sync check).
+// They change only when an admin edits them, so keep them for a minute; a change to registration
+// still takes effect within that minute, and a failed fetch is never cached (the gate stays closed).
+const SETTINGS_MS = 60 * 1000;
+let settingsCache = null; // { origin, cfg, until }
 async function settings(origin) {
+  if (settingsCache && settingsCache.origin === origin && settingsCache.until > Date.now()) return settingsCache.cfg;
   const res = await identity(origin, '/settings');
-  return res.ok ? res.json() : null;
+  const cfg = res.ok ? await res.json() : null;
+  settingsCache = cfg ? { origin, cfg, until: Date.now() + SETTINGS_MS } : null;
+  return cfg;
 }
 async function getUser(origin, at) {
   const res = await identity(origin, '/user', { headers: { authorization: 'Bearer ' + at } });

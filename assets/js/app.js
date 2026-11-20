@@ -1,7 +1,7 @@
 /* UI controller: rendering, forms, dialogs, import/export. */
 (function () {
   // Must match assets/version.txt; bump both on every release so open tabs reload onto new code.
-  const APP_VERSION = '2026.11.20-2';
+  const APP_VERSION = '2026.11.20-3';
   const { t } = I18N;
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));

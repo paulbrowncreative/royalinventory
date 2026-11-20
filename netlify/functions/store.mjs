@@ -35,11 +35,22 @@ function getCookie(req, name) {
   return m ? decodeURIComponent(m[1]) : '';
 }
 
+// Sessions are verified with Identity itself. A verified token is remembered for a minute (as the
+// sign-in gate does), so a device's sync checks every 20 s do not each wait on an Identity round
+// trip; deleting a user in Netlify still locks them out within about a minute.
+const USER_MS = 60 * 1000;
+const verified = new Map(); // access token -> { user, until }
 async function signedInUser(req) {
   const at = getCookie(req, 'ri_at');
   if (!at) return null;
+  const hit = verified.get(at);
+  if (hit && hit.until > Date.now()) return hit.user;
   const res = await fetch(new URL(req.url).origin + '/.netlify/identity/user', { headers: { authorization: 'Bearer ' + at } });
-  return res.ok ? res.json() : null;
+  if (!res.ok) { verified.delete(at); return null; }
+  const user = await res.json();
+  if (verified.size > 500) verified.clear();
+  verified.set(at, { user, until: Date.now() + USER_MS });
+  return user;
 }
 
 // Revision id of a stored copy. A copy written without one (older versions) gets a stable
